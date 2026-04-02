@@ -1,0 +1,13 @@
+{
+  "relays": [
+    "wss://relay.damus.io",
+    "wss://relay.primal.net",
+    "wss://nos.lol"
+  ],
+  "servers": [
+    "https://blossom.primal.net",
+    "https://cdn.hzrd149.com"
+  ],
+  "publishServerList": true,
+  "publishRelayList": true
+}
