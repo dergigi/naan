@@ -155,7 +155,7 @@ function discoverRelays(seedRelays) {
       .subscription(seedRelays, { kinds: [RELAY_DISCOVERY_KIND], limit: 500 })
       .pipe(
         onlyEvents(),
-        timeout(10000),
+        timeout(3000),
         catchError(() => EMPTY)
       )
       .subscribe({
@@ -187,7 +187,7 @@ function discoverRelays(seedRelays) {
       sub.unsubscribe();
       seedRelays.forEach((r) => discovered.delete(r));
       resolve(Array.from(discovered).slice(0, MAX_DISCOVERED_RELAYS));
-    }, 12000);
+    }, 4000);
   });
 }
 
@@ -203,7 +203,7 @@ function queryRelaysForArchives(relays) {
     .subscription(relays, { kinds: [ARCHIVE_KIND], limit: 200 })
     .pipe(
       onlyEvents(),
-      timeout(15000),
+      timeout(10000),
       catchError(() => EMPTY)
     )
     .subscribe({
@@ -217,7 +217,7 @@ function queryRelaysForArchives(relays) {
     });
 
   // Safety close
-  setTimeout(() => sub.unsubscribe(), 16000);
+  setTimeout(() => sub.unsubscribe(), 12000);
   return sub;
 }
 
@@ -254,7 +254,7 @@ async function fetchArchives() {
     btn.disabled = false;
     btn.textContent = "Refresh";
     renderArchives();
-  }, 16000);
+  }, 12000);
 }
 
 // --- Event Listeners ---
