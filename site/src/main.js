@@ -1,6 +1,8 @@
 import { EventStore } from "applesauce-core";
+import { getDisplayName } from "applesauce-core/helpers/profile";
 import { RelayPool } from "applesauce-relay/pool";
 import { onlyEvents } from "applesauce-relay/operators";
+import { createEventLoaderForStore } from "applesauce-loaders/loaders";
 import { timeout, catchError, EMPTY } from "rxjs";
 
 // --- Config ---
@@ -10,6 +12,8 @@ const SEED_RELAYS = [
   "wss://nos.lol",
 ];
 
+const LOOKUP_RELAYS = ["wss://purplepag.es"];
+
 const ARCHIVE_KIND = 4554;
 const RELAY_DISCOVERY_KIND = 30166;
 const MAX_DISCOVERED_RELAYS = 30;
@@ -18,9 +22,18 @@ const ARCHIVE_FILTER = { kinds: [ARCHIVE_KIND] };
 // --- State ---
 const eventStore = new EventStore();
 const pool = new RelayPool();
+
+// Connect event loader so eventStore.profile() can auto-fetch kind 0 events
+createEventLoaderForStore(eventStore, pool, {
+  lookupRelays: LOOKUP_RELAYS,
+});
+
 let discoveredRelayCount = 0;
 let queriedRelayCount = 0;
 const queriedRelays = new Set();
+
+// Profile cache: pubkey -> { name, subscribed }
+const profileCache = new Map();
 
 // --- Helpers ---
 function getTag(event, name) {
@@ -62,6 +75,32 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// Subscribe to a profile and re-render when it arrives
+function subscribeToProfile(pubkey) {
+  if (profileCache.has(pubkey)) return;
+
+  profileCache.set(pubkey, { name: null });
+
+  eventStore.profile(pubkey).subscribe((profile) => {
+    if (profile) {
+      const name = getDisplayName(profile, pubkey.substring(0, 12) + "…");
+      const cached = profileCache.get(pubkey);
+      if (cached && cached.name !== name) {
+        cached.name = name;
+        // Update all elements showing this pubkey
+        document.querySelectorAll(`[data-pubkey="${pubkey}"]`).forEach((el) => {
+          el.textContent = `by ${name}`;
+        });
+      }
+    }
+  });
+}
+
+function getProfileName(pubkey) {
+  const cached = profileCache.get(pubkey);
+  return cached?.name || pubkey.substring(0, 12) + "…";
+}
+
 // --- Rendering ---
 function updateStats() {
   const el = document.getElementById("stats");
@@ -77,7 +116,6 @@ function renderArchives() {
   const list = document.getElementById("archiveList");
   const filter = document.getElementById("searchInput").value.toLowerCase();
 
-  // getTimeline returns events sorted newest first
   let events = getArchiveEvents();
 
   if (filter) {
@@ -100,6 +138,10 @@ function renderArchives() {
     return;
   }
 
+  // Subscribe to profiles for all pubkeys we see
+  const pubkeys = new Set(events.map((e) => e.pubkey));
+  pubkeys.forEach((pk) => subscribeToProfile(pk));
+
   list.innerHTML = events
     .map((event) => {
       const title = getTag(event, "title");
@@ -119,6 +161,8 @@ function renderArchives() {
       const displayTitle = escapeHtml(
         title || originalUrl || "Untitled Archive"
       );
+
+      const profileName = getProfileName(event.pubkey);
 
       return `
       <div class="archive-card">
@@ -145,7 +189,7 @@ function renderArchives() {
           </div>`
             : ""
         }
-        <div class="archive-pubkey">by ${event.pubkey.substring(0, 12)}…</div>
+        <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
       </div>
     `;
     })
