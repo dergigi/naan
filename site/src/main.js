@@ -3,7 +3,7 @@ import { getDisplayName } from "applesauce-core/helpers/profile";
 import { RelayPool } from "applesauce-relay/pool";
 import { onlyEvents, toEventStore } from "applesauce-relay/operators";
 import { createEventLoaderForStore } from "applesauce-loaders/loaders";
-import { timeout, catchError, EMPTY, merge } from "rxjs";
+import { timeout, catchError, EMPTY } from "rxjs";
 
 // --- Config ---
 const SEED_RELAYS = [
@@ -15,6 +15,7 @@ const SEED_RELAYS = [
 const LOOKUP_RELAYS = ["wss://purplepag.es/", "wss://index.hzrd149.com/"];
 
 const ARCHIVE_KIND = 4554;
+const OTS_KIND = 1040;
 const RELAY_DISCOVERY_KIND = 30166;
 const MAX_DISCOVERED_RELAYS = 30;
 const ARCHIVE_FILTER = { kinds: [ARCHIVE_KIND] };
@@ -23,8 +24,6 @@ const ARCHIVE_FILTER = { kinds: [ARCHIVE_KIND] };
 const eventStore = new EventStore();
 const pool = new RelayPool();
 
-// Connect event loader so the store can auto-fetch profiles (kind 0)
-// and other missing events from relays
 createEventLoaderForStore(eventStore, pool, {
   lookupRelays: LOOKUP_RELAYS,
 });
@@ -34,6 +33,9 @@ let discoveredRelayCount = 0;
 let queriedRelayCount = 0;
 const queriedRelays = new Set();
 const profileCache = new Map();
+
+// OTS proofs: archive event ID -> true (has Bitcoin timestamp)
+const otsProofs = new Map();
 
 // --- Helpers ---
 function getTag(event, name) {
@@ -82,7 +84,6 @@ function subscribeToProfile(pubkey) {
       const cached = profileCache.get(pubkey);
       if (cached && cached.name !== name) {
         cached.name = name;
-        // Update DOM elements in-place (no full re-render)
         document.querySelectorAll(`[data-pubkey="${pubkey}"]`).forEach((el) => {
           el.textContent = `by ${name}`;
         });
@@ -94,6 +95,29 @@ function subscribeToProfile(pubkey) {
 function getProfileName(pubkey) {
   const cached = profileCache.get(pubkey);
   return cached?.name || pubkey.substring(0, 12) + "…";
+}
+
+// --- OTS: query for kind 1040 events referencing archive events ---
+function queryOtsProofs(relays, archiveEventIds) {
+  if (archiveEventIds.length === 0) return;
+
+  pool
+    .subscription(relays, { kinds: [OTS_KIND], "#e": archiveEventIds, limit: 500 })
+    .pipe(onlyEvents(), timeout(10000), catchError(() => EMPTY))
+    .subscribe({
+      next: (event) => {
+        // kind 1040 references the archive event via e-tag
+        const referencedId = getTag(event, "e");
+        if (referencedId && !otsProofs.has(referencedId)) {
+          otsProofs.set(referencedId, true);
+          // Update badge in-place
+          const badge = document.querySelector(`[data-ots="${referencedId}"]`);
+          if (badge) {
+            badge.innerHTML = '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>';
+          }
+        }
+      },
+    });
 }
 
 // --- Rendering ---
@@ -132,6 +156,10 @@ function renderArchives(events) {
   const pubkeys = new Set(filtered.map((e) => e.pubkey));
   pubkeys.forEach((pk) => subscribeToProfile(pk));
 
+  // Query OTS proofs for all visible archive events
+  const eventIds = filtered.map((e) => e.id);
+  queryOtsProofs(SEED_RELAYS, eventIds);
+
   list.innerHTML = filtered
     .map((event) => {
       const title = getTag(event, "title");
@@ -146,6 +174,7 @@ function renderArchives(events) {
       const displayDate = archivedAt ? formatDate(parseInt(archivedAt)) : formatDate(event.created_at);
       const displayTitle = escapeHtml(title || originalUrl || "Untitled Archive");
       const profileName = getProfileName(event.pubkey);
+      const hasOts = otsProofs.has(event.id);
 
       return `
       <div class="archive-card">
@@ -162,6 +191,7 @@ function renderArchives(events) {
           ${size ? `<span class="tag">${formatBytes(size)}</span>` : ""}
           ${tool ? `<span class="tag tool">${escapeHtml(tool)}</span>` : ""}
           ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
+          <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
         </div>
         ${blossomUrls.length > 0 ? `
           <div class="archive-links">
@@ -217,14 +247,12 @@ function fetchArchives() {
   queriedRelayCount = 0;
   queriedRelays.clear();
 
-  // Use eventStore.timeline() as a reactive subscription.
-  // It fires whenever the store gets new kind 4554 events.
+  // Reactive timeline subscription — fires on new kind 4554 events
   eventStore.timeline(ARCHIVE_FILTER).subscribe((events) => {
     renderArchives(events);
   });
 
-  // Query seed relays using toEventStore operator (applesauce best practice):
-  // pipes events directly into the store with dedup, triggers timeline subscription
+  // Query relays using toEventStore operator
   function queryRelays(relays) {
     relays.forEach((r) => {
       if (queriedRelays.has(r)) return;
@@ -244,10 +272,8 @@ function fetchArchives() {
       });
   }
 
-  // Step 1: Query seed relays immediately
   queryRelays(SEED_RELAYS);
 
-  // Step 2: Discover more relays via NIP-66 (non-blocking)
   discoverRelays(SEED_RELAYS).then((newRelays) => {
     discoveredRelayCount = newRelays.length;
     if (newRelays.length > 0) {
@@ -257,7 +283,6 @@ function fetchArchives() {
     updateStats();
   });
 
-  // Enable refresh after queries settle
   setTimeout(() => {
     btn.disabled = false;
     btn.textContent = "Refresh";
@@ -266,7 +291,6 @@ function fetchArchives() {
 
 // --- Event Listeners ---
 document.getElementById("searchInput").addEventListener("input", () => {
-  // Re-render with current filter using latest store data
   const events = eventStore.database.getTimeline(ARCHIVE_FILTER);
   renderArchives(events);
 });

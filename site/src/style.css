@@ -146,6 +146,7 @@ main {
 
 .tag.format { color: var(--accent); }
 .tag.tool { color: var(--green); }
+.tag.ots { color: #f7931a; background: rgba(247, 147, 26, 0.12); }
 
 .archive-links {
   margin-top: 0.5rem;
