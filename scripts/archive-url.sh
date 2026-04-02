@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # archive-url.sh — Archive a URL (web page or video), upload to Blossom, publish kind 4554
-# Usage: archive-url.sh <url> [--video] [--dry-run]
+# Usage: archive-url.sh <url> [--video] [--monolith] [--dry-run]
 #
-# Requires: monolith, yt-dlp, nak, curl, jq
+# Web pages are archived with SingleFile (headless Chrome) by default.
+# Use --monolith to fall back to monolith (no browser needed, lighter).
+# Video URLs are auto-detected and downloaded with yt-dlp.
+#
+# Requires: single-file, chromium, yt-dlp, nak, curl, jq
+# Optional: monolith (fallback)
 # Env: NSEC_FILE (path to nsec key)
 
 set -euo pipefail
@@ -11,14 +16,17 @@ ARCHIVE_DIR="/data/.openclaw/agents/naan/workspace/archives"
 NSEC_FILE="${NSEC_FILE:-/data/.openclaw/agents/naan/workspace/.nostr-nsec.key}"
 BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com")
 RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
+CHROME_PATH="${CHROME_PATH:-/usr/bin/chromium}"
 
 URL=""
 IS_VIDEO=false
+USE_MONOLITH=false
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --video) IS_VIDEO=true; shift ;;
+    --monolith) USE_MONOLITH=true; shift ;;
     --dry-run) DRY_RUN=true; shift ;;
     -*) echo "Unknown option: $1" >&2; exit 1 ;;
     *) URL="$1"; shift ;;
@@ -26,7 +34,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$URL" ]; then
-  echo "Usage: archive-url.sh <url> [--video] [--dry-run]" >&2
+  echo "Usage: archive-url.sh <url> [--video] [--monolith] [--dry-run]" >&2
   exit 1
 fi
 
@@ -46,7 +54,7 @@ echo ""
 
 if [ "$IS_VIDEO" = true ]; then
   OUTPUT_TEMPLATE="${ARCHIVE_DIR}/${SAFE_NAME}_${TIMESTAMP}.%(ext)s"
-  echo "[1/3] Downloading video..."
+  echo "[1/3] Downloading video with yt-dlp..."
   yt-dlp \
     --no-playlist \
     -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best" \
@@ -60,10 +68,30 @@ if [ "$IS_VIDEO" = true ]; then
   META_FILE="${ARCHIVE_DIR}/${SAFE_NAME}_${TIMESTAMP}.info.json"
   TITLE=$(jq -r '.title // empty' "$META_FILE" 2>/dev/null || echo "")
   FORMAT="mp4"
-else
+
+elif [ "$USE_MONOLITH" = true ]; then
   ARCHIVED_FILE="${ARCHIVE_DIR}/${SAFE_NAME}_${TIMESTAMP}.html"
   echo "[1/3] Saving web page with monolith..."
   monolith "$URL" --timeout 30 -o "$ARCHIVED_FILE" 2>&1
+  TITLE=$(grep -oP '<title[^>]*>\K[^<]+' "$ARCHIVED_FILE" 2>/dev/null | head -1 || echo "")
+  FORMAT="html"
+
+else
+  ARCHIVED_FILE="${ARCHIVE_DIR}/${SAFE_NAME}_${TIMESTAMP}.html"
+  echo "[1/3] Saving web page with SingleFile (headless Chrome)..."
+  single-file \
+    --browser-executable-path "$CHROME_PATH" \
+    --browser-arg "--no-sandbox" \
+    --browser-wait-until "networkIdle" \
+    --browser-load-max-time 30000 \
+    --browser-capture-max-time 30000 \
+    "$URL" "$ARCHIVED_FILE" 2>&1
+
+  # SingleFile may not produce output on failure, fall back to monolith
+  if [ ! -f "$ARCHIVED_FILE" ] || [ ! -s "$ARCHIVED_FILE" ]; then
+    echo "  SingleFile failed, falling back to monolith..."
+    monolith "$URL" --timeout 30 -o "$ARCHIVED_FILE" 2>&1
+  fi
 
   TITLE=$(grep -oP '<title[^>]*>\K[^<]+' "$ARCHIVED_FILE" 2>/dev/null | head -1 || echo "")
   FORMAT="html"
