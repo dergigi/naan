@@ -1,9 +1,9 @@
 import { EventStore } from "applesauce-core";
 import { getDisplayName } from "applesauce-core/helpers/profile";
 import { RelayPool } from "applesauce-relay/pool";
-import { onlyEvents } from "applesauce-relay/operators";
+import { onlyEvents, toEventStore } from "applesauce-relay/operators";
 import { createEventLoaderForStore } from "applesauce-loaders/loaders";
-import { timeout, catchError, EMPTY } from "rxjs";
+import { timeout, catchError, EMPTY, merge } from "rxjs";
 
 // --- Config ---
 const SEED_RELAYS = [
@@ -12,27 +12,27 @@ const SEED_RELAYS = [
   "wss://nos.lol",
 ];
 
-const LOOKUP_RELAYS = ["wss://purplepag.es"];
+const LOOKUP_RELAYS = ["wss://purplepag.es/", "wss://index.hzrd149.com/"];
 
 const ARCHIVE_KIND = 4554;
 const RELAY_DISCOVERY_KIND = 30166;
 const MAX_DISCOVERED_RELAYS = 30;
 const ARCHIVE_FILTER = { kinds: [ARCHIVE_KIND] };
 
-// --- State ---
+// --- Core: single EventStore + RelayPool (applesauce best practice) ---
 const eventStore = new EventStore();
 const pool = new RelayPool();
 
-// Connect event loader so eventStore.profile() can auto-fetch kind 0 events
+// Connect event loader so the store can auto-fetch profiles (kind 0)
+// and other missing events from relays
 createEventLoaderForStore(eventStore, pool, {
   lookupRelays: LOOKUP_RELAYS,
 });
 
+// --- State ---
 let discoveredRelayCount = 0;
 let queriedRelayCount = 0;
 const queriedRelays = new Set();
-
-// Profile cache: pubkey -> { name, subscribed }
 const profileCache = new Map();
 
 // --- Helpers ---
@@ -43,10 +43,6 @@ function getTag(event, name) {
 
 function getAllTags(event, name) {
   return event.tags.filter((t) => t[0] === name).map((t) => t[1]);
-}
-
-function getArchiveEvents() {
-  return eventStore.database.getTimeline(ARCHIVE_FILTER);
 }
 
 function formatBytes(bytes) {
@@ -75,10 +71,9 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// Subscribe to a profile and re-render when it arrives
+// --- Profile resolution via eventStore.profile() ---
 function subscribeToProfile(pubkey) {
   if (profileCache.has(pubkey)) return;
-
   profileCache.set(pubkey, { name: null });
 
   eventStore.profile(pubkey).subscribe((profile) => {
@@ -87,7 +82,7 @@ function subscribeToProfile(pubkey) {
       const cached = profileCache.get(pubkey);
       if (cached && cached.name !== name) {
         cached.name = name;
-        // Update all elements showing this pubkey
+        // Update DOM elements in-place (no full re-render)
         document.querySelectorAll(`[data-pubkey="${pubkey}"]`).forEach((el) => {
           el.textContent = `by ${name}`;
         });
@@ -104,7 +99,7 @@ function getProfileName(pubkey) {
 // --- Rendering ---
 function updateStats() {
   const el = document.getElementById("stats");
-  const count = getArchiveEvents().length;
+  const count = eventStore.database.getTimeline(ARCHIVE_FILTER).length;
   const relayInfo =
     discoveredRelayCount > 0
       ? `${queriedRelayCount} relays queried (${SEED_RELAYS.length} seed + ${discoveredRelayCount} discovered via NIP-66)`
@@ -112,41 +107,35 @@ function updateStats() {
   el.innerHTML = `<span>${count}</span> archive${count !== 1 ? "s" : ""} found · ${relayInfo}`;
 }
 
-function renderArchives() {
+function renderArchives(events) {
   const list = document.getElementById("archiveList");
   const filter = document.getElementById("searchInput").value.toLowerCase();
 
-  let events = getArchiveEvents();
-
+  let filtered = events;
   if (filter) {
-    events = events.filter((e) => {
+    filtered = events.filter((e) => {
       const title = (getTag(e, "title") || "").toLowerCase();
       const url = (getTag(e, "r") || "").toLowerCase();
       const pages = getAllTags(e, "page").join(" ").toLowerCase();
-      return (
-        title.includes(filter) ||
-        url.includes(filter) ||
-        pages.includes(filter)
-      );
+      return title.includes(filter) || url.includes(filter) || pages.includes(filter);
     });
   }
 
   updateStats();
 
-  if (events.length === 0) {
+  if (filtered.length === 0) {
     list.innerHTML = '<div class="empty">No archives found</div>';
     return;
   }
 
-  // Subscribe to profiles for all pubkeys we see
-  const pubkeys = new Set(events.map((e) => e.pubkey));
+  // Subscribe to profiles for all pubkeys
+  const pubkeys = new Set(filtered.map((e) => e.pubkey));
   pubkeys.forEach((pk) => subscribeToProfile(pk));
 
-  list.innerHTML = events
+  list.innerHTML = filtered
     .map((event) => {
       const title = getTag(event, "title");
-      const originalUrl =
-        getTag(event, "r") || getAllTags(event, "page")[0] || "";
+      const originalUrl = getTag(event, "r") || getAllTags(event, "page")[0] || "";
       const blossomUrls = getAllTags(event, "url");
       const format = getTag(event, "format");
       const size = getTag(event, "size");
@@ -154,24 +143,16 @@ function renderArchives() {
       const tool = getTag(event, "tool");
       const hash = getTag(event, "x");
       const archivedAt = getTag(event, "archived-at");
-      const displayDate = archivedAt
-        ? formatDate(parseInt(archivedAt))
-        : formatDate(event.created_at);
-
-      const displayTitle = escapeHtml(
-        title || originalUrl || "Untitled Archive"
-      );
-
+      const displayDate = archivedAt ? formatDate(parseInt(archivedAt)) : formatDate(event.created_at);
+      const displayTitle = escapeHtml(title || originalUrl || "Untitled Archive");
       const profileName = getProfileName(event.pubkey);
 
       return `
       <div class="archive-card">
         <div class="archive-title">
-          ${
-            blossomUrls.length > 0
-              ? `<a href="${escapeHtml(blossomUrls[0])}" target="_blank">${displayTitle}</a>`
-              : displayTitle
-          }
+          ${blossomUrls.length > 0
+            ? `<a href="${escapeHtml(blossomUrls[0])}" target="_blank">${displayTitle}</a>`
+            : displayTitle}
         </div>
         ${originalUrl ? `<a class="archive-url" href="${escapeHtml(originalUrl)}" target="_blank">${escapeHtml(originalUrl)}</a>` : ""}
         <div class="archive-meta">
@@ -182,16 +163,12 @@ function renderArchives() {
           ${tool ? `<span class="tag tool">${escapeHtml(tool)}</span>` : ""}
           ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
         </div>
-        ${
-          blossomUrls.length > 0
-            ? `<div class="archive-links">
+        ${blossomUrls.length > 0 ? `
+          <div class="archive-links">
             ${blossomUrls.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank">📦 ${i === 0 ? "Blossom" : "Mirror " + i}</a>`).join("")}
-          </div>`
-            : ""
-        }
+          </div>` : ""}
         <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
-      </div>
-    `;
+      </div>`;
     })
     .join("");
 }
@@ -212,24 +189,14 @@ function discoverRelays(seedRelays) {
 
     const sub = pool
       .subscription(seedRelays, { kinds: [RELAY_DISCOVERY_KIND], limit: 500 })
-      .pipe(
-        onlyEvents(),
-        timeout(3000),
-        catchError(() => EMPTY)
-      )
+      .pipe(onlyEvents(), timeout(3000), catchError(() => EMPTY))
       .subscribe({
         next: (event) => {
           const relayUrl = getTag(event, "d");
           if (relayUrl && relayUrl.startsWith("wss://")) {
-            const requiresPayment = event.tags.some(
-              (t) => t[0] === "R" && t[1] === "payment"
-            );
-            const requiresAuth = event.tags.some(
-              (t) => t[0] === "R" && t[1] === "auth"
-            );
-            if (!requiresPayment && !requiresAuth) {
-              discovered.add(relayUrl);
-            }
+            const requiresPayment = event.tags.some((t) => t[0] === "R" && t[1] === "payment");
+            const requiresAuth = event.tags.some((t) => t[0] === "R" && t[1] === "auth");
+            if (!requiresPayment && !requiresAuth) discovered.add(relayUrl);
           }
         },
         complete: () => finish(),
@@ -238,35 +205,6 @@ function discoverRelays(seedRelays) {
 
     setTimeout(finish, 4000);
   });
-}
-
-// --- Query relays for archives ---
-function queryRelaysForArchives(relays) {
-  relays.forEach((r) => {
-    if (queriedRelays.has(r)) return;
-    queriedRelays.add(r);
-    queriedRelayCount++;
-  });
-
-  const sub = pool
-    .subscription(relays, { kinds: [ARCHIVE_KIND], limit: 200 })
-    .pipe(
-      onlyEvents(),
-      timeout(10000),
-      catchError(() => EMPTY)
-    )
-    .subscribe({
-      next: (event) => {
-        eventStore.add(event);
-        renderArchives();
-      },
-      complete: () => {
-        updateStats();
-      },
-    });
-
-  setTimeout(() => sub.unsubscribe(), 12000);
-  return sub;
 }
 
 // --- Main ---
@@ -279,35 +217,61 @@ function fetchArchives() {
   queriedRelayCount = 0;
   queriedRelays.clear();
 
-  // Query seed relays for archives immediately
-  queryRelaysForArchives(SEED_RELAYS);
+  // Use eventStore.timeline() as a reactive subscription.
+  // It fires whenever the store gets new kind 4554 events.
+  eventStore.timeline(ARCHIVE_FILTER).subscribe((events) => {
+    renderArchives(events);
+  });
 
-  // Discover more relays via NIP-66 (non-blocking)
+  // Query seed relays using toEventStore operator (applesauce best practice):
+  // pipes events directly into the store with dedup, triggers timeline subscription
+  function queryRelays(relays) {
+    relays.forEach((r) => {
+      if (queriedRelays.has(r)) return;
+      queriedRelays.add(r);
+      queriedRelayCount++;
+    });
+
+    return pool
+      .subscription(relays, { kinds: [ARCHIVE_KIND], limit: 200 })
+      .pipe(
+        toEventStore(eventStore),
+        timeout(10000),
+        catchError(() => EMPTY)
+      )
+      .subscribe({
+        complete: () => updateStats(),
+      });
+  }
+
+  // Step 1: Query seed relays immediately
+  queryRelays(SEED_RELAYS);
+
+  // Step 2: Discover more relays via NIP-66 (non-blocking)
   discoverRelays(SEED_RELAYS).then((newRelays) => {
     discoveredRelayCount = newRelays.length;
     if (newRelays.length > 0) {
       btn.textContent = `Querying ${newRelays.length + SEED_RELAYS.length} relays...`;
-      queryRelaysForArchives(newRelays);
+      queryRelays(newRelays);
     }
     updateStats();
   });
 
-  // Enable refresh after archive queries settle
+  // Enable refresh after queries settle
   setTimeout(() => {
     btn.disabled = false;
     btn.textContent = "Refresh";
-    renderArchives();
   }, 10000);
 }
 
 // --- Event Listeners ---
 document.getElementById("searchInput").addEventListener("input", () => {
-  renderArchives();
+  // Re-render with current filter using latest store data
+  const events = eventStore.database.getTimeline(ARCHIVE_FILTER);
+  renderArchives(events);
 });
 
-document.getElementById("refreshBtn").addEventListener("click", () => {
-  fetchArchives();
-});
+document.getElementById("refreshBtn").addEventListener("click", fetchArchives);
 
 // --- Boot ---
 fetchArchives();
