@@ -2,11 +2,13 @@
 # archive-url.sh — Archive a URL (web page or video), upload to Blossom, publish kind 4554
 # Usage: archive-url.sh <url> [--video] [--monolith] [--dry-run]
 #
+# Pipeline: SingleFile → Blossom upload → Kind 4554 → OpenTimestamps
+#
 # Web pages are archived with SingleFile (headless Chrome) by default.
 # Use --monolith to fall back to monolith (no browser needed, lighter).
 # Video URLs are auto-detected and downloaded with yt-dlp.
 #
-# Requires: single-file, chromium, yt-dlp, nak, curl, jq
+# Requires: single-file, chromium, yt-dlp, nak, curl, jq, ots
 # Optional: monolith (fallback)
 # Env: NSEC_FILE (path to nsec key)
 
@@ -194,8 +196,19 @@ EVENT_ID=$(nak event \
   -c "" \
   --ts "$TIMESTAMP" 2>/dev/null | jq -r '.id')
 
+# Submit to OpenTimestamps (NIP-03)
+echo ""
+echo "[4/4] Submitting to OpenTimestamps..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if bash "$SCRIPT_DIR/ots-stamp.sh" "$EVENT_ID" 2>&1; then
+  echo "  OTS proof pending — run ots-upgrade.sh later to finalize"
+else
+  echo "  WARNING: OTS stamping failed (non-fatal)" >&2
+fi
+
 echo ""
 echo "=== Archive Complete ==="
 echo "Event:    $EVENT_ID"
 echo "Blossom:  ${BLOSSOM_URLS[*]}"
 echo "Original: $URL"
+echo "OTS:      pending (run ots-upgrade.sh --publish to finalize)"
