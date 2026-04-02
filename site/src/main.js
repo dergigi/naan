@@ -195,7 +195,7 @@ function renderArchives(events) {
         </div>
         ${blossomUrls.length > 0 ? `
           <div class="archive-links">
-            ${blossomUrls.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank">📦 ${i === 0 ? "Blossom" : "Mirror " + i}</a>`).join("")}
+            ${blossomUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}
           </div>` : ""}
         <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
       </div>`;
