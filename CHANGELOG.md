@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.3] - 2026-04-03
+
+### Added
+
+- Bitcoin timestamp badge (`₿ timestamped`) on archives with NIP-03 OTS proofs. Queries relays for kind 1040 events referencing archive events, updates badges in-place.
+- Two new Blossom mirrors: `blossom.sovereignengineering.io` and `haven.dergigi.com`. Archives now upload to 4 servers.
+
+### Fixed
+
+- Blossom links now show the server hostname (e.g. `blossom.primal.net`) instead of generic "Blossom / Mirror 1 / Mirror 2" labels.
+
 ## [0.0.2] - 2026-04-03
 
 ### Added
@@ -42,5 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tags: `url`, `r`, `x` (SHA-256), `m` (MIME), `format`, `size`, `title`, `archived-at`, `tool`
 - Uploads to multiple Blossom servers for redundancy
 
+[0.0.3]: https://github.com/dergigi/naan/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/dergigi/naan/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/dergigi/naan/releases/tag/v0.0.1
