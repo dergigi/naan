@@ -2,6 +2,16 @@
 .nostr-nsec.key
 *.nsec
 
+# Agent workspace files (OpenClaw internals)
+SOUL.md
+IDENTITY.md
+TOOLS.md
+AGENTS.md
+USER.md
+HEARTBEAT.md
+BOOT.md
+MEMORY.md
+
 # Archives (local cache, too large for git)
 archives/
 
