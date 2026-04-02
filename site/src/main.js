@@ -1,7 +1,7 @@
 import { EventStore } from "applesauce-core";
 import { RelayPool } from "applesauce-relay/pool";
 import { onlyEvents } from "applesauce-relay/operators";
-import { take, toArray, timeout, catchError, of, merge, switchMap, tap, timer, EMPTY } from "rxjs";
+import { timeout, catchError, EMPTY } from "rxjs";
 
 // --- Config ---
 const SEED_RELAYS = [
@@ -13,6 +13,7 @@ const SEED_RELAYS = [
 const ARCHIVE_KIND = 4554;
 const RELAY_DISCOVERY_KIND = 30166;
 const MAX_DISCOVERED_RELAYS = 30;
+const ARCHIVE_FILTER = { kinds: [ARCHIVE_KIND] };
 
 // --- State ---
 const eventStore = new EventStore();
@@ -29,6 +30,10 @@ function getTag(event, name) {
 
 function getAllTags(event, name) {
   return event.tags.filter((t) => t[0] === name).map((t) => t[1]);
+}
+
+function getArchiveEvents() {
+  return eventStore.database.getTimeline(ARCHIVE_FILTER);
 }
 
 function formatBytes(bytes) {
@@ -60,7 +65,7 @@ function escapeHtml(str) {
 // --- Rendering ---
 function updateStats() {
   const el = document.getElementById("stats");
-  const count = eventStore.database.getAll().length;
+  const count = getArchiveEvents().length;
   const relayInfo =
     discoveredRelayCount > 0
       ? `${queriedRelayCount} relays queried (${SEED_RELAYS.length} seed + ${discoveredRelayCount} discovered via NIP-66)`
@@ -72,7 +77,8 @@ function renderArchives() {
   const list = document.getElementById("archiveList");
   const filter = document.getElementById("searchInput").value.toLowerCase();
 
-  let events = eventStore.database.getAll().sort((a, b) => b.created_at - a.created_at);
+  // getTimeline returns events sorted newest first
+  let events = getArchiveEvents();
 
   if (filter) {
     events = events.filter((e) => {
@@ -150,6 +156,15 @@ function renderArchives() {
 function discoverRelays(seedRelays) {
   return new Promise((resolve) => {
     const discovered = new Set();
+    let resolved = false;
+
+    function finish() {
+      if (resolved) return;
+      resolved = true;
+      sub.unsubscribe();
+      seedRelays.forEach((r) => discovered.delete(r));
+      resolve(Array.from(discovered).slice(0, MAX_DISCOVERED_RELAYS));
+    }
 
     const sub = pool
       .subscription(seedRelays, { kinds: [RELAY_DISCOVERY_KIND], limit: 500 })
@@ -162,7 +177,6 @@ function discoverRelays(seedRelays) {
         next: (event) => {
           const relayUrl = getTag(event, "d");
           if (relayUrl && relayUrl.startsWith("wss://")) {
-            // Skip relays requiring payment or auth
             const requiresPayment = event.tags.some(
               (t) => t[0] === "R" && t[1] === "payment"
             );
@@ -174,20 +188,11 @@ function discoverRelays(seedRelays) {
             }
           }
         },
-        complete: () => {
-          // Remove seed relays from discovered
-          seedRelays.forEach((r) => discovered.delete(r));
-          resolve(Array.from(discovered).slice(0, MAX_DISCOVERED_RELAYS));
-        },
-        error: () => resolve([]),
+        complete: () => finish(),
+        error: () => finish(),
       });
 
-    // Safety timeout
-    setTimeout(() => {
-      sub.unsubscribe();
-      seedRelays.forEach((r) => discovered.delete(r));
-      resolve(Array.from(discovered).slice(0, MAX_DISCOVERED_RELAYS));
-    }, 4000);
+    setTimeout(finish, 4000);
   });
 }
 
@@ -216,18 +221,8 @@ function queryRelaysForArchives(relays) {
       },
     });
 
-  // Safety close
   setTimeout(() => sub.unsubscribe(), 12000);
   return sub;
-}
-
-function setLoading(text) {
-  const list = document.getElementById("archiveList");
-  const existing = eventStore.database.getAll();
-  // Only show loading spinner if we have no events yet
-  if (existing.length === 0) {
-    list.innerHTML = `<div class="loading"><span class="spinner"></span> ${text}</div>`;
-  }
 }
 
 // --- Main ---
@@ -236,16 +231,14 @@ function fetchArchives() {
   btn.disabled = true;
   btn.textContent = "Querying relays...";
 
-  setLoading("Querying relays...");
-
   discoveredRelayCount = 0;
   queriedRelayCount = 0;
   queriedRelays.clear();
 
-  // Step 1: Query seed relays for archives immediately
+  // Query seed relays for archives immediately
   queryRelaysForArchives(SEED_RELAYS);
 
-  // Step 2: Discover more relays via NIP-66 (non-blocking)
+  // Discover more relays via NIP-66 (non-blocking)
   discoverRelays(SEED_RELAYS).then((newRelays) => {
     discoveredRelayCount = newRelays.length;
     if (newRelays.length > 0) {
