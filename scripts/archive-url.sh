@@ -16,7 +16,7 @@ set -euo pipefail
 
 ARCHIVE_DIR="/data/.openclaw/agents/naan/workspace/archives"
 NSEC_FILE="${NSEC_FILE:-/data/.openclaw/agents/naan/workspace/.nostr-nsec.key}"
-BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com")
+BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com" "https://blossom.sovereignengineering.io" "https://haven.dergigi.com")
 RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
 CHROME_PATH="${CHROME_PATH:-/usr/bin/chromium}"
 

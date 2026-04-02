@@ -9,6 +9,7 @@ set -euo pipefail
 
 FILE="${1:?Usage: blossom-upload.sh <file> [server_url]}"
 SERVER="${2:-https://blossom.primal.net}"
+# Available servers: blossom.primal.net, cdn.hzrd149.com, blossom.sovereignengineering.io, haven.dergigi.com
 NSEC_FILE="${NSEC_FILE:-/data/.openclaw/agents/naan/workspace/.nostr-nsec.key}"
 
 if [ ! -f "$FILE" ]; then
