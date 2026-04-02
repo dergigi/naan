@@ -231,12 +231,12 @@ function setLoading(text) {
 }
 
 // --- Main ---
-async function fetchArchives() {
+function fetchArchives() {
   const btn = document.getElementById("refreshBtn");
   btn.disabled = true;
   btn.textContent = "Querying relays...";
 
-  setLoading("Querying seed relays...");
+  setLoading("Querying relays...");
 
   discoveredRelayCount = 0;
   queriedRelayCount = 0;
@@ -245,19 +245,15 @@ async function fetchArchives() {
   // Step 1: Query seed relays for archives immediately
   queryRelaysForArchives(SEED_RELAYS);
 
-  // Step 2: Discover more relays via NIP-66 (runs in parallel)
-  setLoading("Discovering relays via NIP-66...");
-  const newRelays = await discoverRelays(SEED_RELAYS);
-  discoveredRelayCount = newRelays.length;
-
-  // Step 3: Query discovered relays for archives
-  if (newRelays.length > 0) {
-    btn.textContent = `Querying ${newRelays.length + SEED_RELAYS.length} relays...`;
-    setLoading(`Querying ${newRelays.length} discovered relays...`);
-    queryRelaysForArchives(newRelays);
-  }
-
-  updateStats();
+  // Step 2: Discover more relays via NIP-66 (non-blocking)
+  discoverRelays(SEED_RELAYS).then((newRelays) => {
+    discoveredRelayCount = newRelays.length;
+    if (newRelays.length > 0) {
+      btn.textContent = `Querying ${newRelays.length + SEED_RELAYS.length} relays...`;
+      queryRelaysForArchives(newRelays);
+    }
+    updateStats();
+  });
 
   // Enable refresh after archive queries settle
   setTimeout(() => {
