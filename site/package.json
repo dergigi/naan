@@ -1,0 +1,23 @@
+{
+  "name": "site",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "applesauce-common": "^5.2.0",
+    "applesauce-core": "^5.2.0",
+    "applesauce-loaders": "^5.1.0",
+    "applesauce-relay": "^5.2.0",
+    "nostr-tools": "^2.23.3",
+    "rxjs": "^7.8.2",
+    "vite": "^8.0.3"
+  }
+}

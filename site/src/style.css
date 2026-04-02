@@ -1,0 +1,208 @@
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #f0b232;
+  --link: #58a6ff;
+  --green: #3fb950;
+  --tag-bg: #1f2937;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+header {
+  border-bottom: 1px solid var(--border);
+  padding: 1.5rem 2rem;
+  text-align: center;
+}
+
+header h1 {
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+header h1 span.naan { color: var(--accent); }
+
+header p {
+  color: var(--text-muted);
+  margin-top: 0.3rem;
+  font-size: 0.95rem;
+}
+
+.controls {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem 2rem;
+  flex-wrap: wrap;
+}
+
+.controls input[type="text"] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  width: 320px;
+  max-width: 100%;
+}
+
+.controls input::placeholder { color: var(--text-muted); }
+
+.controls button {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  padding: 0.5rem 1.2rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.controls button:hover { opacity: 0.85; }
+.controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.stats {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 0 2rem 0.75rem;
+}
+
+.stats span { color: var(--green); font-weight: 600; }
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 1.5rem 3rem;
+}
+
+.archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.archive-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  transition: border-color 0.15s;
+}
+
+.archive-card:hover { border-color: var(--accent); }
+
+.archive-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  word-break: break-word;
+}
+
+.archive-title a { color: var(--text); text-decoration: none; }
+.archive-title a:hover { color: var(--accent); }
+
+.archive-url {
+  color: var(--link);
+  font-size: 0.85rem;
+  word-break: break-all;
+  text-decoration: none;
+  display: block;
+}
+
+.archive-url:hover { text-decoration: underline; }
+
+.archive-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.tag {
+  background: var(--tag-bg);
+  color: var(--text-muted);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 0.78rem;
+}
+
+.tag.format { color: var(--accent); }
+.tag.tool { color: var(--green); }
+
+.archive-links {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.archive-links a {
+  color: var(--link);
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+
+.archive-links a:hover { text-decoration: underline; }
+
+.archive-pubkey {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-family: monospace;
+  margin-top: 0.35rem;
+}
+
+.empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 4rem 1rem;
+  font-size: 1.1rem;
+}
+
+.loading {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 3rem 1rem;
+}
+
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+footer {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+footer a { color: var(--link); text-decoration: none; }
+footer a:hover { text-decoration: underline; }

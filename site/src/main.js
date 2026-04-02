@@ -1,0 +1,270 @@
+import { EventStore } from "applesauce-core";
+import { RelayPool } from "applesauce-relay/pool";
+import { onlyEvents } from "applesauce-relay/operators";
+import { take, toArray, timeout, catchError, of, merge, switchMap, tap, timer, EMPTY } from "rxjs";
+
+// --- Config ---
+const SEED_RELAYS = [
+  "wss://relay.damus.io",
+  "wss://relay.primal.net",
+  "wss://nos.lol",
+];
+
+const ARCHIVE_KIND = 4554;
+const RELAY_DISCOVERY_KIND = 30166;
+const MAX_DISCOVERED_RELAYS = 30;
+
+// --- State ---
+const eventStore = new EventStore();
+const pool = new RelayPool();
+let discoveredRelayCount = 0;
+let queriedRelayCount = 0;
+const queriedRelays = new Set();
+
+// --- Helpers ---
+function getTag(event, name) {
+  const tag = event.tags.find((t) => t[0] === name);
+  return tag ? tag[1] : null;
+}
+
+function getAllTags(event, name) {
+  return event.tags.filter((t) => t[0] === name).map((t) => t[1]);
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return null;
+  const n = parseInt(bytes);
+  if (isNaN(n)) return bytes;
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
+  return (n / 1073741824).toFixed(2) + " GB";
+}
+
+function formatDate(timestamp) {
+  return new Date(timestamp * 1000).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// --- Rendering ---
+function updateStats() {
+  const el = document.getElementById("stats");
+  const count = eventStore.database.getAll().length;
+  const relayInfo =
+    discoveredRelayCount > 0
+      ? `${queriedRelayCount} relays queried (${SEED_RELAYS.length} seed + ${discoveredRelayCount} discovered via NIP-66)`
+      : `${queriedRelayCount} relays queried`;
+  el.innerHTML = `<span>${count}</span> archive${count !== 1 ? "s" : ""} found · ${relayInfo}`;
+}
+
+function renderArchives() {
+  const list = document.getElementById("archiveList");
+  const filter = document.getElementById("searchInput").value.toLowerCase();
+
+  let events = eventStore.database.getAll().sort((a, b) => b.created_at - a.created_at);
+
+  if (filter) {
+    events = events.filter((e) => {
+      const title = (getTag(e, "title") || "").toLowerCase();
+      const url = (getTag(e, "r") || "").toLowerCase();
+      const pages = getAllTags(e, "page").join(" ").toLowerCase();
+      return (
+        title.includes(filter) ||
+        url.includes(filter) ||
+        pages.includes(filter)
+      );
+    });
+  }
+
+  updateStats();
+
+  if (events.length === 0) {
+    list.innerHTML = '<div class="empty">No archives found</div>';
+    return;
+  }
+
+  list.innerHTML = events
+    .map((event) => {
+      const title = getTag(event, "title");
+      const originalUrl =
+        getTag(event, "r") || getAllTags(event, "page")[0] || "";
+      const blossomUrls = getAllTags(event, "url");
+      const format = getTag(event, "format");
+      const size = getTag(event, "size");
+      const mime = getTag(event, "m");
+      const tool = getTag(event, "tool");
+      const hash = getTag(event, "x");
+      const archivedAt = getTag(event, "archived-at");
+      const displayDate = archivedAt
+        ? formatDate(parseInt(archivedAt))
+        : formatDate(event.created_at);
+
+      const displayTitle = escapeHtml(
+        title || originalUrl || "Untitled Archive"
+      );
+
+      return `
+      <div class="archive-card">
+        <div class="archive-title">
+          ${
+            blossomUrls.length > 0
+              ? `<a href="${escapeHtml(blossomUrls[0])}" target="_blank">${displayTitle}</a>`
+              : displayTitle
+          }
+        </div>
+        ${originalUrl ? `<a class="archive-url" href="${escapeHtml(originalUrl)}" target="_blank">${escapeHtml(originalUrl)}</a>` : ""}
+        <div class="archive-meta">
+          <span class="tag">${displayDate}</span>
+          ${format ? `<span class="tag format">${escapeHtml(format.toUpperCase())}</span>` : ""}
+          ${mime ? `<span class="tag">${escapeHtml(mime)}</span>` : ""}
+          ${size ? `<span class="tag">${formatBytes(size)}</span>` : ""}
+          ${tool ? `<span class="tag tool">${escapeHtml(tool)}</span>` : ""}
+          ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
+        </div>
+        ${
+          blossomUrls.length > 0
+            ? `<div class="archive-links">
+            ${blossomUrls.map((u, i) => `<a href="${escapeHtml(u)}" target="_blank">📦 ${i === 0 ? "Blossom" : "Mirror " + i}</a>`).join("")}
+          </div>`
+            : ""
+        }
+        <div class="archive-pubkey">by ${event.pubkey.substring(0, 12)}…</div>
+      </div>
+    `;
+    })
+    .join("");
+}
+
+// --- Relay Discovery (NIP-66) ---
+function discoverRelays(seedRelays) {
+  return new Promise((resolve) => {
+    const discovered = new Set();
+
+    const sub = pool
+      .subscription(seedRelays, { kinds: [RELAY_DISCOVERY_KIND], limit: 500 })
+      .pipe(
+        onlyEvents(),
+        timeout(10000),
+        catchError(() => EMPTY)
+      )
+      .subscribe({
+        next: (event) => {
+          const relayUrl = getTag(event, "d");
+          if (relayUrl && relayUrl.startsWith("wss://")) {
+            // Skip relays requiring payment or auth
+            const requiresPayment = event.tags.some(
+              (t) => t[0] === "R" && t[1] === "payment"
+            );
+            const requiresAuth = event.tags.some(
+              (t) => t[0] === "R" && t[1] === "auth"
+            );
+            if (!requiresPayment && !requiresAuth) {
+              discovered.add(relayUrl);
+            }
+          }
+        },
+        complete: () => {
+          // Remove seed relays from discovered
+          seedRelays.forEach((r) => discovered.delete(r));
+          resolve(Array.from(discovered).slice(0, MAX_DISCOVERED_RELAYS));
+        },
+        error: () => resolve([]),
+      });
+
+    // Safety timeout
+    setTimeout(() => {
+      sub.unsubscribe();
+      seedRelays.forEach((r) => discovered.delete(r));
+      resolve(Array.from(discovered).slice(0, MAX_DISCOVERED_RELAYS));
+    }, 12000);
+  });
+}
+
+// --- Query relays for archives ---
+function queryRelaysForArchives(relays) {
+  relays.forEach((r) => {
+    if (queriedRelays.has(r)) return;
+    queriedRelays.add(r);
+    queriedRelayCount++;
+  });
+
+  const sub = pool
+    .subscription(relays, { kinds: [ARCHIVE_KIND], limit: 200 })
+    .pipe(
+      onlyEvents(),
+      timeout(15000),
+      catchError(() => EMPTY)
+    )
+    .subscribe({
+      next: (event) => {
+        eventStore.add(event);
+        renderArchives();
+      },
+      complete: () => {
+        updateStats();
+      },
+    });
+
+  // Safety close
+  setTimeout(() => sub.unsubscribe(), 16000);
+  return sub;
+}
+
+// --- Main ---
+async function fetchArchives() {
+  const btn = document.getElementById("refreshBtn");
+  btn.disabled = true;
+  btn.textContent = "Discovering relays...";
+
+  const list = document.getElementById("archiveList");
+  list.innerHTML =
+    '<div class="loading"><span class="spinner"></span> Discovering relays via NIP-66...</div>';
+
+  discoveredRelayCount = 0;
+  queriedRelayCount = 0;
+  queriedRelays.clear();
+
+  // Step 1: Query seed relays for archives immediately
+  queryRelaysForArchives(SEED_RELAYS);
+
+  // Step 2: Discover more relays via NIP-66
+  const newRelays = await discoverRelays(SEED_RELAYS);
+  discoveredRelayCount = newRelays.length;
+
+  btn.textContent = `Querying ${newRelays.length + SEED_RELAYS.length} relays...`;
+
+  // Step 3: Query discovered relays for archives
+  if (newRelays.length > 0) {
+    queryRelaysForArchives(newRelays);
+  }
+
+  // Done loading
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.textContent = "Refresh";
+    renderArchives();
+  }, 16000);
+}
+
+// --- Event Listeners ---
+document.getElementById("searchInput").addEventListener("input", () => {
+  renderArchives();
+});
+
+document.getElementById("refreshBtn").addEventListener("click", () => {
+  fetchArchives();
+});
+
+// --- Boot ---
+fetchArchives();
