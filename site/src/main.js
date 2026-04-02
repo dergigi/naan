@@ -221,15 +221,22 @@ function queryRelaysForArchives(relays) {
   return sub;
 }
 
+function setLoading(text) {
+  const list = document.getElementById("archiveList");
+  const existing = eventStore.database.getAll();
+  // Only show loading spinner if we have no events yet
+  if (existing.length === 0) {
+    list.innerHTML = `<div class="loading"><span class="spinner"></span> ${text}</div>`;
+  }
+}
+
 // --- Main ---
 async function fetchArchives() {
   const btn = document.getElementById("refreshBtn");
   btn.disabled = true;
-  btn.textContent = "Discovering relays...";
+  btn.textContent = "Querying relays...";
 
-  const list = document.getElementById("archiveList");
-  list.innerHTML =
-    '<div class="loading"><span class="spinner"></span> Discovering relays via NIP-66...</div>';
+  setLoading("Querying seed relays...");
 
   discoveredRelayCount = 0;
   queriedRelayCount = 0;
@@ -238,23 +245,26 @@ async function fetchArchives() {
   // Step 1: Query seed relays for archives immediately
   queryRelaysForArchives(SEED_RELAYS);
 
-  // Step 2: Discover more relays via NIP-66
+  // Step 2: Discover more relays via NIP-66 (runs in parallel)
+  setLoading("Discovering relays via NIP-66...");
   const newRelays = await discoverRelays(SEED_RELAYS);
   discoveredRelayCount = newRelays.length;
 
-  btn.textContent = `Querying ${newRelays.length + SEED_RELAYS.length} relays...`;
-
   // Step 3: Query discovered relays for archives
   if (newRelays.length > 0) {
+    btn.textContent = `Querying ${newRelays.length + SEED_RELAYS.length} relays...`;
+    setLoading(`Querying ${newRelays.length} discovered relays...`);
     queryRelaysForArchives(newRelays);
   }
 
-  // Done loading
+  updateStats();
+
+  // Enable refresh after archive queries settle
   setTimeout(() => {
     btn.disabled = false;
     btn.textContent = "Refresh";
     renderArchives();
-  }, 12000);
+  }, 10000);
 }
 
 // --- Event Listeners ---
