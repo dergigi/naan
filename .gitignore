@@ -1,0 +1,13 @@
+# Secrets
+.nostr-nsec.key
+*.nsec
+
+# Archives (local cache, too large for git)
+archives/
+
+# OS
+.DS_Store
+*.swp
+
+# Memory (agent-specific, may contain private info)
+memory/
