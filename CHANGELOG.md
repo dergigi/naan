@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-03
+
+### Added
+
+- OpenClaw skill (`naan-archiver/`) that packages the full NAAN archival pipeline as a portable, installable skill. Any OpenClaw agent can become an archival node by installing it. Includes parameterized scripts for URL archiving, Blossom uploads, archive lookups, OTS stamping and upgrading, and WoT-gated mention monitoring. Configuration is driven by a single `naan.conf` file, with auto-discovery of Blossom servers (kind 10063) and relays (kind 10002) from the operator's Nostr metadata.
+
 ## [0.1.1] - 2026-04-03
 
 ### Added
@@ -83,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tags: `url`, `r`, `x` (SHA-256), `m` (MIME), `format`, `size`, `title`, `archived-at`, `tool`
 - Uploads to multiple Blossom servers for redundancy
 
+[0.2.0]: https://github.com/dergigi/naan/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/dergigi/naan/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/dergigi/naan/compare/v0.0.4...v0.1.0
 [0.0.4]: https://github.com/dergigi/naan/compare/v0.0.3...v0.0.4
