@@ -13,21 +13,54 @@
   </header>
 
   <div class="controls">
-    <input type="text" id="searchInput" placeholder="Filter by URL or title..." />
-    <button id="refreshBtn">Refresh</button>
+    <div class="view-toggle">
+      <button id="browseTab" class="tab active">Browse</button>
+      <button id="lookupTab" class="tab">Lookup URL</button>
+    </div>
+    <div class="search-row">
+      <input type="text" id="searchInput" placeholder="Filter by URL or title..." />
+      <button id="refreshBtn">Refresh</button>
+    </div>
   </div>
 
   <div class="stats" id="stats"></div>
 
   <main>
-    <div id="archiveList" class="archive-list">
-      <div class="loading"><span class="spinner"></span> Querying relays...</div>
+    <!-- Browse view (default) -->
+    <div id="browseView">
+      <div id="archiveList" class="archive-list">
+        <div class="loading"><span class="spinner"></span> Querying relays...</div>
+      </div>
+    </div>
+
+    <!-- Lookup/Calendar view -->
+    <div id="lookupView" class="hidden">
+      <div id="lookupLoading" class="hidden">
+        <div class="loading"><span class="spinner"></span> Searching archives for this URL...</div>
+      </div>
+      <div id="lookupEmpty" class="hidden">
+        <div class="empty">No archives found for this URL</div>
+      </div>
+      <div id="lookupResults" class="hidden">
+        <div id="lookupUrl" class="lookup-url"></div>
+        <div id="lookupSummary" class="lookup-summary"></div>
+        <div id="timeline" class="timeline"></div>
+        <div id="calendarSection" class="calendar-section">
+          <div class="calendar-nav">
+            <button id="calPrev" class="cal-nav-btn">&larr;</button>
+            <span id="calYear" class="cal-year"></span>
+            <button id="calNext" class="cal-nav-btn">&rarr;</button>
+          </div>
+          <div id="calendarGrid" class="calendar-grid"></div>
+        </div>
+        <div id="snapshotList" class="snapshot-list"></div>
+      </div>
     </div>
   </main>
 
   <footer>
     <p>Powered by <a href="https://applesauce.build">Applesauce</a> + <a href="https://github.com/hzrd149/blossom">Blossom</a> + Nostr · <a href="https://github.com/dergigi/naan">GitHub</a> · <a href="https://nsyte.run">nsyte</a></p>
-    <p>v0.0.3</p>
+    <p>v0.1.0</p>
   </footer>
 
   <script type="module" src="/src/main.js"></script>
