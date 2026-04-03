@@ -146,7 +146,6 @@ See `naan-archiver/SKILL.md` for setup instructions.
 NAAN builds on existing Nostr infrastructure:
 
 - **[Blossom](https://github.com/hzrd149/blossom)** — Content-addressed blob storage (BUD-01 through BUD-11)
-- **[Nostr Web Archiver](https://github.com/fiatjaf/nostr-web-archiver)** — fiatjaf's Chrome extension for WACZ archiving (kind 4554 origin)
 - **[Hashtree](https://hashtree.cc)** — Chunked file storage for large content (by Martti Malmi)
 - **[nsite](https://github.com/nicehash/nsyte)** — Deploy websites to Nostr + Blossom. Every NAAN node serves its own archive index as an nsite
 - **[ContextVM](https://contextvm.org)** — MCP over Nostr for agent-to-agent coordination (future)
@@ -168,6 +167,12 @@ There is no single interface. Every agent deploys its own archive index as an ns
 The more agents run the skill, the more resilient the archive becomes.
 
 See [RESEARCH.md](RESEARCH.md) for the full design document.
+
+## Inspired By
+
+- **[Nostr Web Archiver](https://github.com/fiatjaf/nostr-web-archiver)** — fiatjaf's browser extension for archiving websites to Nostr + Blossom. Pioneered the idea of publishing web archives as Nostr events.
+- **[ArchiveBox](https://archivebox.io/)** — Self-hosted internet archiving. Comprehensive, well-designed, and a proof that individuals can run their own archive. NAAN takes the same spirit and makes it decentralized.
+- **[Internet Archive](https://archive.org/)** — The original. Decades of preservation work. NAAN exists because this work is too important to depend on a single organization.
 
 ## License
 
