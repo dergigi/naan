@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-04-03
+
+### Added
+
+- Configurable access tiers for archive requests. New `ACCESS_TIER` setting in `naan.conf` supports five levels: `owner`, `friends` (mutual follows), `followers`, `follows` (default, backward-compatible), and `anyone`. Whitelist and blacklist files (`WHITELIST_FILE`, `BLACKLIST_FILE`) allow per-pubkey overrides. Blacklist always wins.
+- `naan.conf.example` template with full access control documentation.
+- Followers detection: queries kind 3 events where the owner is tagged, cached hourly.
+- Friends (mutual follow) detection: checks both follow directions.
+
+### Changed
+
+- Refactored `is_authorized()` in both workspace and skill `monitor-mentions.sh` to support all five access tiers with consistent evaluation order: blacklist, whitelist, owner, then tier.
+
 ## [0.5.0] - 2026-04-03
 
 ### Added
@@ -130,6 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tags: `url`, `r`, `x` (SHA-256), `m` (MIME), `format`, `size`, `title`, `archived-at`, `tool`
 - Uploads to multiple Blossom servers for redundancy
 
+[0.5.1]: https://github.com/dergigi/naan/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/dergigi/naan/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/dergigi/naan/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/dergigi/naan/compare/v0.4.0...v0.4.1
