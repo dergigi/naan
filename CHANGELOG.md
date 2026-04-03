@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-03
+
+### Added
+
+- Global archive activity timeline on the browse view. A horizontal bar chart shows archive density over time, always visible above the feed. Granularity auto-adapts based on data span: daily bars for spans under 2 months, weekly for under a year, monthly beyond that. Clicking a bar filters the feed to that period. Respects the active type filter (All/Pages/Videos).
+
+### Changed
+
+- Unified the Browse and Lookup URL tabs into a single search bar that auto-detects intent. Typing a URL and pressing Enter shows the calendar/timeline view; typing plain text filters the archive feed in real time; clearing the input returns to the full feed.
+- Added type filter buttons (All / Pages / Videos) below the search bar, replacing the old tab toggle. Defaults to Pages.
+
 ## [0.3.0] - 2026-04-03
 
 ### Added
@@ -98,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tags: `url`, `r`, `x` (SHA-256), `m` (MIME), `format`, `size`, `title`, `archived-at`, `tool`
 - Uploads to multiple Blossom servers for redundancy
 
+[0.4.0]: https://github.com/dergigi/naan/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/dergigi/naan/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dergigi/naan/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/dergigi/naan/compare/v0.1.0...v0.1.1
