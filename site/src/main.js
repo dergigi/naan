@@ -45,6 +45,9 @@ const otsProofs = new Map();
 let currentMode = "browse";
 let activeFilter = "pages"; // "all" | "pages" | "videos"
 
+// Global timeline state
+let timelineFilterRange = null; // { start: Date, end: Date, label: string } or null
+
 // Lookup state
 let lookupEvents = [];
 let lookupUrl = "";
@@ -228,9 +231,11 @@ function setMode(mode) {
   if (mode === "browse") {
     browseView.classList.remove("hidden");
     lookupSection.classList.add("hidden");
-    // Re-render with current filter
+    timelineFilterRange = null;
+    document.getElementById("timelineFilter").classList.add("hidden");
     const events = eventStore.database.getTimeline(ARCHIVE_FILTER);
     renderArchives(events);
+    renderGlobalTimeline(events);
   } else {
     browseView.classList.add("hidden");
     lookupSection.classList.remove("hidden");
@@ -273,6 +278,16 @@ function renderArchives(events) {
       const pages = getAllTags(e, "page").join(" ").toLowerCase();
       const hashtags = getAllTags(e, "t").join(" ").toLowerCase();
       return title.includes(filter) || url.includes(filter) || pages.includes(filter) || hashtags.includes(filter);
+    });
+  }
+
+  // Apply timeline date filter
+  if (timelineFilterRange) {
+    const startTs = Math.floor(timelineFilterRange.start.getTime() / 1000);
+    const endTs = Math.floor(timelineFilterRange.end.getTime() / 1000);
+    filtered = filtered.filter((e) => {
+      const ts = getEventTimestamp(e);
+      return ts >= startTs && ts < endTs;
     });
   }
 
@@ -396,6 +411,199 @@ function renderArchiveCard(event) {
       </div>` : ""}
     <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
   </div>`;
+}
+
+// ===================================================
+// GLOBAL ACTIVITY TIMELINE (browse view)
+// ===================================================
+
+function computeBuckets(events) {
+  if (events.length === 0) return { buckets: [], granularity: "day" };
+
+  const timestamps = events.map((e) => getEventTimestamp(e)).sort((a, b) => a - b);
+  const earliest = new Date(timestamps[0] * 1000);
+  const latest = new Date(timestamps[timestamps.length - 1] * 1000);
+  const now = new Date();
+  const end = latest > now ? latest : now;
+
+  const spanDays = Math.ceil((end - earliest) / (1000 * 60 * 60 * 24));
+
+  let granularity, bucketFn, labelFn, rangeFn;
+
+  if (spanDays <= 60) {
+    // Daily bars
+    granularity = "day";
+    bucketFn = (ts) => {
+      const d = new Date(ts * 1000);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    labelFn = (key) => {
+      const [y, m, d] = key.split("-").map(Number);
+      return `${MONTH_NAMES[m - 1]} ${d}`;
+    };
+    rangeFn = (key) => {
+      const [y, m, d] = key.split("-").map(Number);
+      const start = new Date(y, m - 1, d);
+      const end = new Date(y, m - 1, d + 1);
+      return { start, end };
+    };
+  } else if (spanDays <= 365) {
+    // Weekly bars
+    granularity = "week";
+    bucketFn = (ts) => {
+      const d = new Date(ts * 1000);
+      // Week start (Monday)
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(d.getFullYear(), d.getMonth(), diff);
+      return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
+    };
+    labelFn = (key) => {
+      const [y, m, d] = key.split("-").map(Number);
+      return `${MONTH_NAMES[m - 1]} ${d}`;
+    };
+    rangeFn = (key) => {
+      const [y, m, d] = key.split("-").map(Number);
+      const start = new Date(y, m - 1, d);
+      const end = new Date(y, m - 1, d + 7);
+      return { start, end };
+    };
+  } else {
+    // Monthly bars
+    granularity = "month";
+    bucketFn = (ts) => {
+      const d = new Date(ts * 1000);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    };
+    labelFn = (key) => {
+      const [y, m] = key.split("-").map(Number);
+      return `${MONTH_NAMES[m - 1]} ${y}`;
+    };
+    rangeFn = (key) => {
+      const [y, m] = key.split("-").map(Number);
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m, 1);
+      return { start, end };
+    };
+  }
+
+  // Count events per bucket
+  const counts = new Map();
+  events.forEach((e) => {
+    const key = bucketFn(getEventTimestamp(e));
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+
+  // Generate contiguous bucket keys from earliest to end
+  const allKeys = [];
+  if (granularity === "day") {
+    const cursor = new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate());
+    while (cursor <= end) {
+      allKeys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  } else if (granularity === "week") {
+    const day = earliest.getDay();
+    const diff = earliest.getDate() - day + (day === 0 ? -6 : 1);
+    const cursor = new Date(earliest.getFullYear(), earliest.getMonth(), diff);
+    while (cursor <= end) {
+      allKeys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`);
+      cursor.setDate(cursor.getDate() + 7);
+    }
+  } else {
+    const cursor = new Date(earliest.getFullYear(), earliest.getMonth(), 1);
+    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+    while (cursor <= endMonth) {
+      allKeys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+
+  const buckets = allKeys.map((key) => ({
+    key,
+    count: counts.get(key) || 0,
+    label: labelFn(key),
+    range: rangeFn(key),
+  }));
+
+  return { buckets, granularity };
+}
+
+function renderGlobalTimeline(events) {
+  const el = document.getElementById("globalTimeline");
+  const filtered = applyTypeFilter(events);
+
+  if (filtered.length === 0) {
+    el.innerHTML = "";
+    return;
+  }
+
+  const { buckets, granularity } = computeBuckets(filtered);
+  if (buckets.length === 0) {
+    el.innerHTML = "";
+    return;
+  }
+
+  const maxCount = Math.max(...buckets.map((b) => b.count));
+  const granLabel = granularity === "day" ? "daily" : granularity === "week" ? "weekly" : "monthly";
+
+  // Pick ~5-7 label positions spread evenly
+  const labelCount = Math.min(buckets.length, 7);
+  const labelStep = Math.max(1, Math.floor(buckets.length / labelCount));
+  const labelIndices = new Set();
+  for (let i = 0; i < buckets.length; i += labelStep) labelIndices.add(i);
+  labelIndices.add(buckets.length - 1); // always show last
+
+  const barsHtml = buckets.map((b, i) => {
+    const height = b.count > 0 ? Math.max(3, Math.round((b.count / maxCount) * 60)) : 0;
+    const isActive = timelineFilterRange && b.key === timelineFilterRange.key;
+    const tooltip = `${b.label}: ${b.count} archive${b.count !== 1 ? "s" : ""}`;
+    return `<div class="gt-bar${isActive ? " active" : ""}" data-idx="${i}" title="${tooltip}" style="height: ${height}px; background: ${b.count > 0 ? "rgba(240, 178, 50, 0.55)" : "rgba(48, 54, 61, 0.3)"}"></div>`;
+  }).join("");
+
+  const labelsHtml = Array.from(labelIndices)
+    .sort((a, b) => a - b)
+    .map((i) => `<span>${escapeHtml(buckets[i].label)}</span>`)
+    .join("");
+
+  el.innerHTML = `
+    <div class="global-timeline-title">Archive activity (${granLabel})</div>
+    <div class="global-timeline-bars">${barsHtml}</div>
+    <div class="global-timeline-labels">${labelsHtml}</div>
+  `;
+
+  // Click handlers
+  el.querySelectorAll(".gt-bar").forEach((bar) => {
+    bar.addEventListener("click", () => {
+      const idx = parseInt(bar.dataset.idx);
+      const bucket = buckets[idx];
+      if (bucket.count === 0) return;
+
+      if (timelineFilterRange && timelineFilterRange.key === bucket.key) {
+        // Deselect
+        clearTimelineFilter();
+      } else {
+        timelineFilterRange = { ...bucket.range, key: bucket.key, label: bucket.label };
+        const filterEl = document.getElementById("timelineFilter");
+        const labelEl = document.getElementById("timelineFilterLabel");
+        filterEl.classList.remove("hidden");
+        labelEl.textContent = `Showing ${bucket.count} archive${bucket.count !== 1 ? "s" : ""} from ${bucket.label}`;
+
+        // Re-render with filter
+        const allEvents = eventStore.database.getTimeline(ARCHIVE_FILTER);
+        renderArchives(allEvents);
+        renderGlobalTimeline(allEvents); // refresh active state
+      }
+    });
+  });
+}
+
+function clearTimelineFilter() {
+  timelineFilterRange = null;
+  document.getElementById("timelineFilter").classList.add("hidden");
+  const events = eventStore.database.getTimeline(ARCHIVE_FILTER);
+  renderArchives(events);
+  renderGlobalTimeline(events);
 }
 
 // ===================================================
@@ -807,6 +1015,7 @@ function fetchArchives() {
   eventStore.timeline(ARCHIVE_FILTER).subscribe((events) => {
     if (currentMode === "browse") {
       renderArchives(events);
+      renderGlobalTimeline(events);
     }
   });
 
@@ -876,6 +1085,7 @@ function rerender() {
   if (currentMode === "browse") {
     const events = eventStore.database.getTimeline(ARCHIVE_FILTER);
     renderArchives(events);
+    renderGlobalTimeline(events);
   } else {
     // Re-filter lookup results
     const filtered = applyTypeFilter(lookupEvents);
@@ -926,6 +1136,9 @@ document.querySelectorAll(".filter-btn").forEach((btn) => {
     rerender();
   });
 });
+
+// Timeline filter clear
+document.getElementById("timelineFilterClear").addEventListener("click", clearTimelineFilter);
 
 // Calendar navigation
 document.getElementById("calPrev").addEventListener("click", () => {

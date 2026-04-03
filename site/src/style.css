@@ -135,6 +135,86 @@ main {
   padding: 0 1.5rem 3rem;
 }
 
+/* Global activity timeline */
+.global-timeline {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.global-timeline-title {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-bottom: 0.5rem;
+}
+
+.global-timeline-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 64px;
+}
+
+.gt-bar {
+  flex: 1;
+  min-width: 2px;
+  border-radius: 1px 1px 0 0;
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.gt-bar:hover {
+  background: var(--accent) !important;
+}
+
+.gt-bar.active {
+  background: var(--accent) !important;
+}
+
+.global-timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.global-timeline-labels span {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+.timeline-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: rgba(240, 178, 50, 0.1);
+  border: 1px solid rgba(240, 178, 50, 0.3);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.timeline-filter .filter-clear {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.timeline-filter .filter-clear:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 /* Archive list */
 .archive-list {
   display: flex;
