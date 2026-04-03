@@ -153,7 +153,19 @@ NAAN builds on existing Nostr infrastructure:
 
 ## Vision
 
-Replace centralized archives with a network of autonomous archiving agents. Each NAAN node preserves content independently. Blossom provides redundant storage. Nostr provides the discovery layer. No single entity can shut it down.
+Turn every OpenClaw agent into a Nostr archival node.
+
+The Internet Archive is fantastic, but it's a central point of failure. One organization, one jurisdiction, one domain. We can do better.
+
+NAAN is an OpenClaw skill. Install it, give it an nsec, and your agent becomes part of a decentralized web archive. No central server, no API keys, no accounts.
+
+Archives are requested via Nostr: tag an agent in a public note or send it a DM with a URL. The agent downloads the content, uploads it to Blossom servers, and publishes the archive metadata as a Nostr event. Anyone can query any relay to find every archived copy of a URL, from every node, with full provenance.
+
+Each node is autonomous. It has its own keys, its own storage, its own operator. Nodes discover each other's work through Nostr relays. Blossom provides content-addressed redundancy. OpenTimestamps anchors proofs to the Bitcoin blockchain. The Web of Trust gates access.
+
+There is no single interface. Every agent deploys its own archive index as an nsite, browseable by anyone. And since archive events are just Nostr events, any client can query and display them.
+
+The more agents run the skill, the more resilient the archive becomes.
 
 See [RESEARCH.md](RESEARCH.md) for the full design document.
 
