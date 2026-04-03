@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # archive-url.sh — Archive a URL (web page or video), upload to Blossom, publish kind 4554
-# Usage: archive-url.sh <url> [--video] [--monolith] [--hashtree] [--dry-run]
+# Usage: archive-url.sh <url> [--video] [--monolith] [--hashtree] [--requester <pubkey>] [--dry-run]
 #
 # Pipeline: SingleFile → Blossom upload → (Hashtree) → Kind 4554 → OpenTimestamps
 #
@@ -31,12 +31,14 @@ IS_VIDEO=false
 USE_MONOLITH=false
 FORCE_HASHTREE=false
 DRY_RUN=false
+REQUESTER_PUBKEY=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --video) IS_VIDEO=true; shift ;;
     --monolith) USE_MONOLITH=true; shift ;;
     --hashtree) FORCE_HASHTREE=true; shift ;;
+    --requester) REQUESTER_PUBKEY="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
     -*) echo "Unknown option: $1" >&2; exit 1 ;;
     *) URL="$1"; shift ;;
@@ -228,6 +230,10 @@ TAG_ARGS+=(-t "size=$FILESIZE")
 [ -n "$TITLE" ] && TAG_ARGS+=(-t "title=$TITLE")
 TAG_ARGS+=(-t "archived-at=$TIMESTAMP")
 TAG_ARGS+=(-t "tool=naan")
+# Include requester pubkey if provided
+if [ -n "$REQUESTER_PUBKEY" ]; then
+  TAG_ARGS+=(-t "p=${REQUESTER_PUBKEY};;requester")
+fi
 # Include Hashtree root if chunking was successful
 if [ -n "$HTREE_ROOT" ]; then
   TAG_ARGS+=(-t "hashtree=$HTREE_ROOT")
@@ -256,7 +262,7 @@ if [ "$IS_VIDEO" = true ]; then
   BLOSSOM_URLS_FILE=$(mktemp)
   printf '%s\n' "${BLOSSOM_URLS[@]}" > "$BLOSSOM_URLS_FILE"
   SCRIPT_DIR_NIP71="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  NIP71_OUTPUT=$(bash "$SCRIPT_DIR_NIP71/publish-nip71.sh" "$ARCHIVED_FILE" "$META_FILE" "$URL" "$BLOSSOM_URLS_FILE" "$HTREE_ROOT" 2>&1) || true
+  NIP71_OUTPUT=$(bash "$SCRIPT_DIR_NIP71/publish-nip71.sh" "$ARCHIVED_FILE" "$META_FILE" "$URL" "$BLOSSOM_URLS_FILE" "$HTREE_ROOT" "$REQUESTER_PUBKEY" 2>&1) || true
   echo "$NIP71_OUTPUT"
   NIP71_EVENT_ID=$(echo "$NIP71_OUTPUT" | tail -1)
   rm -f "$BLOSSOM_URLS_FILE"

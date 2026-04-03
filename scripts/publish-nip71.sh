@@ -15,6 +15,7 @@ META_JSON="${2:?Missing meta_json path}"
 ORIGINAL_URL="${3:?Missing original URL}"
 BLOSSOM_URLS_FILE="${4:?Missing blossom_urls_file (one URL per line)}"
 HTREE_ROOT="${5:-}"
+REQUESTER_PUBKEY="${6:-}"
 
 NSEC_FILE="${NSEC_FILE:-/data/.openclaw/agents/naan/workspace/.nostr-nsec.key}"
 RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
@@ -143,6 +144,11 @@ fi
 
 # r-tag for the original URL
 TAG_ARGS+=(-t "r=${ORIGINAL_URL}")
+
+# Requester attribution
+if [ -n "$REQUESTER_PUBKEY" ]; then
+  TAG_ARGS+=(-t "p=${REQUESTER_PUBKEY};;requester")
+fi
 
 # Content: video description (truncated to 2000 chars)
 CONTENT=""

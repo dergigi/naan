@@ -282,7 +282,7 @@ while IFS= read -r event_json; do
 
   # Run the archive pipeline
   echo "[Archive] Running archive pipeline..."
-  ARCHIVE_OUTPUT=$(bash "$SCRIPT_DIR/archive-url.sh" "$TARGET_URL" 2>&1) || {
+  ARCHIVE_OUTPUT=$(bash "$SCRIPT_DIR/archive-url.sh" "$TARGET_URL" --requester "$SENDER" 2>&1) || {
     echo "[Error] Archive failed for $TARGET_URL"
     echo "$ARCHIVE_OUTPUT" | tail -5
     REPLY="Archive failed for $TARGET_URL. I'll look into it."

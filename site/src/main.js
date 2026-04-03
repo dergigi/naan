@@ -64,6 +64,21 @@ function getAllTags(event, name) {
   return event.tags.filter((t) => t[0] === name).map((t) => t[1]);
 }
 
+function getRequesterPubkey(event) {
+  const tag = event.tags.find((t) => t[0] === "p" && t[3] === "requester");
+  return tag ? tag[1] : null;
+}
+
+function renderAttribution(event) {
+  const profileName = getProfileName(event.pubkey);
+  const requester = getRequesterPubkey(event);
+  if (requester && requester !== event.pubkey) {
+    const reqName = getProfileName(requester);
+    return `<div class="archive-pubkey">by <span data-pubkey="${event.pubkey}">${escapeHtml(profileName)}</span>, requested by <span data-pubkey="${requester}">${escapeHtml(reqName)}</span></div>`;
+  }
+  return `<div class="archive-pubkey">by <span data-pubkey="${event.pubkey}">${escapeHtml(profileName)}</span></div>`;
+}
+
 function formatBytes(bytes) {
   if (!bytes) return null;
   const n = parseInt(bytes);
@@ -186,7 +201,7 @@ function subscribeToProfile(pubkey) {
       if (cached && cached.name !== name) {
         cached.name = name;
         document.querySelectorAll(`[data-pubkey="${pubkey}"]`).forEach((el) => {
-          el.textContent = `by ${name}`;
+          el.textContent = name;
         });
       }
     }
@@ -299,6 +314,10 @@ function renderArchives(events) {
   }
 
   const pubkeys = new Set(filtered.map((e) => e.pubkey));
+  filtered.forEach((e) => {
+    const req = getRequesterPubkey(e);
+    if (req) pubkeys.add(req);
+  });
   pubkeys.forEach((pk) => subscribeToProfile(pk));
 
   const eventIds = filtered.map((e) => e.id);
@@ -371,7 +390,7 @@ function renderArchiveCard(event) {
           ${hashtreeRoot ? `<a href="https://files.iris.to/#/${escapeHtml(hashtreeRoot)}/${escapeHtml(videoUrl.split('/').pop() || hash + '.mp4')}" target="_blank">🌲 Stream via Hashtree</a>` : ""}
         </div>` : ""}
       ${origin ? `<div class="archive-origin">via ${escapeHtml(origin[1])}${origin[3] ? ` · <a href="${escapeHtml(origin[3])}" target="_blank">original</a>` : ""}</div>` : ""}
-      <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
+      ${renderAttribution(event)}
     </div>`;
   }
 
@@ -409,7 +428,7 @@ function renderArchiveCard(event) {
         ${blossomUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}
         ${hashtreeRoot ? (() => { const fn = blossomUrls.length > 0 ? blossomUrls[0].split('/').pop() : (hash ? hash + '.' + (format || 'bin') : ''); return `<a href="https://files.iris.to/#/${escapeHtml(hashtreeRoot)}/${escapeHtml(fn)}" target="_blank">🌲 Hashtree viewer</a>`; })() : ""}
       </div>` : ""}
-    <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
+    ${renderAttribution(event)}
   </div>`;
 }
 
@@ -706,6 +725,10 @@ function finishLookup(url, events) {
   document.getElementById("lookupResults").classList.remove("hidden");
 
   const pubkeys = new Set(filtered.map((e) => e.pubkey));
+  filtered.forEach((e) => {
+    const req = getRequesterPubkey(e);
+    if (req) pubkeys.add(req);
+  });
   pubkeys.forEach((pk) => subscribeToProfile(pk));
 
   queryOtsProofs(SEED_RELAYS, filtered.map((e) => e.id));
@@ -930,7 +953,7 @@ function renderSnapshotList(filterDate, events) {
           <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
         </div>
         ${allUrls.length > 0 || htRoot ? `<div class="archive-links">${allUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}${htRoot ? ` <a href="https://files.iris.to/#/${escapeHtml(htRoot)}/${escapeHtml(videoUrl.split('/').pop() || hash + '.mp4')}" target="_blank">🌲 Stream</a>` : ""}</div>` : ""}
-        <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
+        ${renderAttribution(event)}
       </div>`;
     }
 
@@ -957,7 +980,7 @@ function renderSnapshotList(filterDate, events) {
         <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
       </div>
       ${blossomUrls.length > 0 || htRoot ? `<div class="archive-links">${blossomUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}${htRoot ? ` <a href="https://files.iris.to/#/${escapeHtml(htRoot)}/${escapeHtml(blossomUrls.length > 0 ? blossomUrls[0].split('/').pop() : (hash || '') + '.' + (format || 'bin'))}" target="_blank">🌲 Hashtree</a>` : ""}</div>` : ""}
-      <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
+      ${renderAttribution(event)}
     </div>`;
   }).join("");
 }
