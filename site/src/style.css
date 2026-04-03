@@ -207,3 +207,47 @@ footer {
 
 footer a { color: var(--link); text-decoration: none; }
 footer a:hover { text-decoration: underline; }
+
+/* NIP-71 Video cards */
+.video-card { position: relative; }
+
+.video-thumb {
+  position: relative;
+  margin-bottom: 0.75rem;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+}
+
+.video-thumb a { display: block; }
+
+.video-thumb img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  max-height: 360px;
+}
+
+.video-duration {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 0.78rem;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+}
+
+.tag.hashtag { color: var(--link); }
+
+.archive-origin {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 0.35rem;
+}
+
+.archive-origin a { color: var(--link); text-decoration: none; }
+.archive-origin a:hover { text-decoration: underline; }

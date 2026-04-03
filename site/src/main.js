@@ -15,10 +15,13 @@ const SEED_RELAYS = [
 const LOOKUP_RELAYS = ["wss://purplepag.es/", "wss://index.hzrd149.com/"];
 
 const ARCHIVE_KIND = 4554;
+const VIDEO_KIND_H = 34235; // NIP-71 horizontal/landscape video
+const VIDEO_KIND_V = 34236; // NIP-71 vertical/shorts video
 const OTS_KIND = 1040;
 const RELAY_DISCOVERY_KIND = 30166;
 const MAX_DISCOVERED_RELAYS = 30;
-const ARCHIVE_FILTER = { kinds: [ARCHIVE_KIND] };
+const ALL_KINDS = [ARCHIVE_KIND, VIDEO_KIND_H, VIDEO_KIND_V];
+const ARCHIVE_FILTER = { kinds: ALL_KINDS };
 
 // --- Core: single EventStore + RelayPool (applesauce best practice) ---
 const eventStore = new EventStore();
@@ -55,6 +58,45 @@ function formatBytes(bytes) {
   if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
   if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
   return (n / 1073741824).toFixed(2) + " GB";
+}
+
+function formatDuration(seconds) {
+  if (!seconds) return null;
+  const s = parseInt(seconds);
+  if (isNaN(s)) return null;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+function parseImeta(event) {
+  // Parse imeta tags: ["imeta", "url X", "m Y", "x Z", ...]
+  const imetaTags = event.tags.filter((t) => t[0] === "imeta");
+  const result = [];
+  for (const tag of imetaTags) {
+    const entry = {};
+    for (let i = 1; i < tag.length; i++) {
+      const space = tag[i].indexOf(" ");
+      if (space > 0) {
+        const key = tag[i].substring(0, space);
+        const val = tag[i].substring(space + 1);
+        if (key === "fallback") {
+          entry.fallbacks = entry.fallbacks || [];
+          entry.fallbacks.push(val);
+        } else {
+          entry[key] = val;
+        }
+      }
+    }
+    result.push(entry);
+  }
+  return result;
+}
+
+function isVideoEvent(event) {
+  return event.kind === VIDEO_KIND_H || event.kind === VIDEO_KIND_V;
 }
 
 function formatDate(timestamp) {
@@ -123,12 +165,19 @@ function queryOtsProofs(relays, archiveEventIds) {
 // --- Rendering ---
 function updateStats() {
   const el = document.getElementById("stats");
-  const count = eventStore.database.getTimeline(ARCHIVE_FILTER).length;
+  const allEvents = eventStore.database.getTimeline(ARCHIVE_FILTER);
+  const archiveCount = allEvents.filter((e) => e.kind === ARCHIVE_KIND).length;
+  const videoCount = allEvents.filter((e) => isVideoEvent(e)).length;
+  const total = allEvents.length;
   const relayInfo =
     discoveredRelayCount > 0
       ? `${queriedRelayCount} relays queried (${SEED_RELAYS.length} seed + ${discoveredRelayCount} discovered via NIP-66)`
       : `${queriedRelayCount} relays queried`;
-  el.innerHTML = `<span>${count}</span> archive${count !== 1 ? "s" : ""} found · ${relayInfo}`;
+  const countParts = [];
+  if (archiveCount > 0) countParts.push(`${archiveCount} archive${archiveCount !== 1 ? "s" : ""}`);
+  if (videoCount > 0) countParts.push(`${videoCount} video${videoCount !== 1 ? "s" : ""}`);
+  const countStr = countParts.length > 0 ? countParts.join(", ") : `${total} item${total !== 1 ? "s" : ""}`;
+  el.innerHTML = `<span>${countStr}</span> found · ${relayInfo}`;
 }
 
 function renderArchives(events) {
@@ -141,7 +190,8 @@ function renderArchives(events) {
       const title = (getTag(e, "title") || "").toLowerCase();
       const url = (getTag(e, "r") || "").toLowerCase();
       const pages = getAllTags(e, "page").join(" ").toLowerCase();
-      return title.includes(filter) || url.includes(filter) || pages.includes(filter);
+      const hashtags = getAllTags(e, "t").join(" ").toLowerCase();
+      return title.includes(filter) || url.includes(filter) || pages.includes(filter) || hashtags.includes(filter);
     });
   }
 
@@ -162,8 +212,72 @@ function renderArchives(events) {
 
   list.innerHTML = filtered
     .map((event) => {
+      const isVideo = isVideoEvent(event);
       const title = getTag(event, "title");
       const originalUrl = getTag(event, "r") || getAllTags(event, "page")[0] || "";
+      const profileName = getProfileName(event.pubkey);
+      const hasOts = otsProofs.has(event.id);
+
+      if (isVideo) {
+        // NIP-71 video event rendering
+        const imeta = parseImeta(event);
+        const videoMeta = imeta.find((m) => m.m && m.m.startsWith("video/")) || imeta[0] || {};
+        const thumbMeta = imeta.find((m) => m.m && m.m.startsWith("image/"));
+        const duration = getTag(event, "duration");
+        const publishedAt = getTag(event, "published_at");
+        const origin = event.tags.find((t) => t[0] === "origin");
+        const hashtags = getAllTags(event, "t");
+
+        const videoUrl = videoMeta.url || "";
+        const thumbUrl = videoMeta.image || (thumbMeta && thumbMeta.url) || "";
+        const dims = videoMeta.dim || "";
+        const size = videoMeta.size || "";
+        const hash = videoMeta.x || "";
+        const mime = videoMeta.m || "";
+        const fallbacks = videoMeta.fallbacks || [];
+        const allUrls = [videoUrl, ...fallbacks].filter(Boolean);
+
+        const displayDate = publishedAt ? formatDate(parseInt(publishedAt)) : formatDate(event.created_at);
+        const displayTitle = escapeHtml(title || originalUrl || "Untitled Video");
+        const durationStr = formatDuration(duration);
+        const kindLabel = event.kind === VIDEO_KIND_V ? "shorts" : "video";
+
+        return `
+        <div class="archive-card video-card">
+          ${thumbUrl ? `
+          <div class="video-thumb">
+            <a href="${escapeHtml(videoUrl || originalUrl)}" target="_blank">
+              <img src="${escapeHtml(thumbUrl)}" alt="${displayTitle}" loading="lazy" />
+              ${durationStr ? `<span class="video-duration">${durationStr}</span>` : ""}
+            </a>
+          </div>` : ""}
+          <div class="archive-title">
+            ${videoUrl
+              ? `<a href="${escapeHtml(videoUrl)}" target="_blank">${displayTitle}</a>`
+              : displayTitle}
+          </div>
+          ${originalUrl ? `<a class="archive-url" href="${escapeHtml(originalUrl)}" target="_blank">${escapeHtml(originalUrl)}</a>` : ""}
+          <div class="archive-meta">
+            <span class="tag">${displayDate}</span>
+            <span class="tag format">🎬 ${escapeHtml(kindLabel.toUpperCase())}</span>
+            ${mime ? `<span class="tag">${escapeHtml(mime)}</span>` : ""}
+            ${dims ? `<span class="tag">${escapeHtml(dims)}</span>` : ""}
+            ${size ? `<span class="tag">${formatBytes(size)}</span>` : ""}
+            ${durationStr ? `<span class="tag">⏱ ${durationStr}</span>` : ""}
+            ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
+            <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
+          </div>
+          ${hashtags.length > 0 ? `<div class="archive-meta">${hashtags.slice(0, 8).map((t) => `<span class="tag hashtag">#${escapeHtml(t)}</span>`).join("")}</div>` : ""}
+          ${allUrls.length > 0 ? `
+            <div class="archive-links">
+              ${allUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}
+            </div>` : ""}
+          ${origin ? `<div class="archive-origin">via ${escapeHtml(origin[1])}${origin[3] ? ` · <a href="${escapeHtml(origin[3])}" target="_blank">original</a>` : ""}</div>` : ""}
+          <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
+        </div>`;
+      }
+
+      // Standard kind 4554 archive event rendering
       const blossomUrls = getAllTags(event, "url");
       const format = getTag(event, "format");
       const size = getTag(event, "size");
@@ -173,8 +287,6 @@ function renderArchives(events) {
       const archivedAt = getTag(event, "archived-at");
       const displayDate = archivedAt ? formatDate(parseInt(archivedAt)) : formatDate(event.created_at);
       const displayTitle = escapeHtml(title || originalUrl || "Untitled Archive");
-      const profileName = getProfileName(event.pubkey);
-      const hasOts = otsProofs.has(event.id);
 
       return `
       <div class="archive-card">
@@ -261,7 +373,7 @@ function fetchArchives() {
     });
 
     return pool
-      .subscription(relays, { kinds: [ARCHIVE_KIND], limit: 200 })
+      .subscription(relays, { kinds: ALL_KINDS, limit: 200 })
       .pipe(
         toEventStore(eventStore),
         timeout(10000),
