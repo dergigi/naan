@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-04-03
+
+### Changed
+
+- Rewrote the Vision section in the README. Lead with the goal: turn every OpenClaw agent into a Nostr archival node. Acknowledge the Internet Archive as fantastic but fragile, describe the Nostr + Blossom architecture, and note that every node deploys its own archive index as an nsite.
+- Unified browse and URL lookup into a single search bar with auto-detection. Added type filter buttons (All/Pages/Videos), defaulting to Pages.
+
 ## [0.4.1] - 2026-04-03
 
 ### Added
@@ -117,6 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tags: `url`, `r`, `x` (SHA-256), `m` (MIME), `format`, `size`, `title`, `archived-at`, `tool`
 - Uploads to multiple Blossom servers for redundancy
 
+[0.4.2]: https://github.com/dergigi/naan/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/dergigi/naan/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/dergigi/naan/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/dergigi/naan/compare/v0.2.0...v0.3.0
