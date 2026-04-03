@@ -19,6 +19,7 @@ NSEC_FILE="${NSEC_FILE:-/data/.openclaw/agents/naan/workspace/.nostr-nsec.key}"
 BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com" "https://blossom.sovereignengineering.io" "https://haven.dergigi.com")
 RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
 CHROME_PATH="${CHROME_PATH:-/usr/bin/chromium}"
+COOKIES_FILE="${COOKIES_FILE:-/data/.openclaw/agents/naan/workspace/.youtube-cookies.txt}"
 
 URL=""
 IS_VIDEO=false
@@ -56,6 +57,11 @@ echo ""
 
 if [ "$IS_VIDEO" = true ]; then
   OUTPUT_TEMPLATE="${ARCHIVE_DIR}/${SAFE_NAME}_${TIMESTAMP}.%(ext)s"
+  COOKIE_ARGS=()
+  if [ -f "$COOKIES_FILE" ]; then
+    COOKIE_ARGS=(--cookies "$COOKIES_FILE")
+  fi
+
   echo "[1/3] Downloading video with yt-dlp..."
   yt-dlp \
     --no-playlist \
@@ -63,6 +69,7 @@ if [ "$IS_VIDEO" = true ]; then
     --merge-output-format mp4 \
     -o "$OUTPUT_TEMPLATE" \
     --write-info-json \
+    "${COOKIE_ARGS[@]}" \
     "$URL" 2>&1
 
   # Find the downloaded file (yt-dlp resolves the extension)
