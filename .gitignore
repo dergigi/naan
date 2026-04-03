@@ -15,6 +15,9 @@ MEMORY.md
 # Archives (local cache, too large for git)
 archives/
 
+# Mention monitor state
+.mention-state/
+
 # OS
 .DS_Store
 *.swp
