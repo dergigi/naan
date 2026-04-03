@@ -109,6 +109,24 @@ Three modes (set by configuring `OWNER_PUBKEY` in `naan.conf`):
 2. **Follows**: anyone the owner follows (kind 3 contact list) can request archives
 3. **Open**: leave `OWNER_PUBKEY` blank to accept from anyone (not recommended)
 
+## Deploy Archive Index
+
+Every NAAN node can deploy its own browseable archive index as an nsite:
+
+```bash
+bash scripts/deploy-nsite.sh
+```
+
+This clones the NAAN site from GitHub, builds it, and deploys it to Blossom servers and Nostr relays using the node's own nsec. The site is then accessible at `https://<your-npub>.nsite.lol/`.
+
+To pull the latest site code and redeploy:
+
+```bash
+bash scripts/deploy-nsite.sh --update
+```
+
+Requires: `git`, `node`, `npm`, `nsyte`
+
 ## Periodic Tasks
 
 Set up cron jobs for:
