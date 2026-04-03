@@ -63,10 +63,12 @@ if [ "$IS_VIDEO" = true ]; then
   fi
 
   echo "[1/3] Downloading video with yt-dlp..."
+  export PATH="/data/.deno/bin:$PATH"
   yt-dlp \
     --no-playlist \
     -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best" \
     --merge-output-format mp4 \
+    --remote-components ejs:github \
     -o "$OUTPUT_TEMPLATE" \
     --write-info-json \
     "${COOKIE_ARGS[@]}" \
