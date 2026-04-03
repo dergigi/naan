@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.4] - 2026-04-03
+
+### Added
+
+- NIP-71 video event publishing. When archiving a video, a kind 34235 (landscape) or 34236 (vertical) event is published alongside the kind 4554 archive event. Archived videos now appear in nostube, Amethyst, and other NIP-71-aware clients.
+- New `publish-nip71.sh` script handles video metadata extraction from yt-dlp's `info.json`, builds `imeta` tags with Blossom URLs and fallback mirrors, and adds `origin`, `duration`, `published_at`, and hashtag tags.
+- Archive index site now queries and displays NIP-71 video events with thumbnail previews, duration overlays, dimensions, hashtags, and origin platform links.
+- Search in the archive index now also filters by hashtags.
+- Stats display now distinguishes between archives and videos.
+
 ## [0.0.3] - 2026-04-03
 
 ### Added
@@ -53,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tags: `url`, `r`, `x` (SHA-256), `m` (MIME), `format`, `size`, `title`, `archived-at`, `tool`
 - Uploads to multiple Blossom servers for redundancy
 
+[0.0.4]: https://github.com/dergigi/naan/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/dergigi/naan/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/dergigi/naan/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/dergigi/naan/releases/tag/v0.0.1
