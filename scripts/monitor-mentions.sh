@@ -21,7 +21,7 @@ NAAN_PUBKEY="d1ee2f8ee60e7b2496176963e9f710ca476c456f5f9be2bbe3b4f1e6c62052ff"
 # Gigi's pubkey (always allowed as owner)
 OWNER_PUBKEY="6e468422dfb74a5738702a8823b9b28168abab8655faacb6853cd0ee15deee93"
 
-RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
+RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol" "wss://wot.dergigi.com" "wss://haven.dergigi.com" "wss://relay.dergigi.com")
 DM_RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
 
 # Access control: owner | friends | followers | follows | anyone
