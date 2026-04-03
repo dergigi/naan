@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-03
+
+### Added
+
+- NIP-65 relay discovery via new `relay-discovery.sh` script. Fetches kind 10002 relay list events to discover inbox and outbox relays for any pubkey. Results are cached for 1 hour.
+- The mention monitor now dynamically builds its relay list from NAAN's NIP-65 inbox relays merged with seed relays. Mentions arriving on personal relays are no longer missed.
+- `archive-url.sh` discovers NAAN's outbox relays for publishing kind 4554 events.
+- `lookup-archive.sh` queries discovered relays when checking for existing archives.
+- `build_mention_relays()` helper combines inbox, outbox, and seed relays for flexible querying.
+
 ## [0.5.1] - 2026-04-03
 
 ### Added
