@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # archive-url.sh — Archive a URL (web page or video), upload to Blossom, publish kind 4554
-# Usage: archive-url.sh <url> [--video] [--monolith] [--dry-run]
+# Usage: archive-url.sh <url> [--video] [--monolith] [--hashtree] [--dry-run]
 #
-# Pipeline: SingleFile → Blossom upload → Kind 4554 → OpenTimestamps
+# Pipeline: SingleFile → Blossom upload → (Hashtree) → Kind 4554 → OpenTimestamps
+#
+# Files over 50MB are automatically chunked via Hashtree for streaming support.
+# Use --hashtree to force Hashtree chunking regardless of file size.
 #
 # Web pages are archived with SingleFile (headless Chrome) by default.
 # Use --monolith to fall back to monolith (no browser needed, lighter).
 # Video URLs are auto-detected and downloaded with yt-dlp.
 #
 # Requires: single-file, chromium, yt-dlp, nak, curl, jq, ots
-# Optional: monolith (fallback)
+# Optional: monolith (fallback), htree (hashtree-cli for chunked storage)
 # Env: NSEC_FILE (path to nsec key)
 
 set -euo pipefail
@@ -20,16 +23,20 @@ BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com" "https:/
 RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
 CHROME_PATH="${CHROME_PATH:-/usr/bin/chromium}"
 COOKIES_FILE="${COOKIES_FILE:-/data/.openclaw/agents/naan/workspace/.youtube-cookies.txt}"
+HTREE_THRESHOLD=${HTREE_THRESHOLD:-52428800}  # 50MB default
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 URL=""
 IS_VIDEO=false
 USE_MONOLITH=false
+FORCE_HASHTREE=false
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --video) IS_VIDEO=true; shift ;;
     --monolith) USE_MONOLITH=true; shift ;;
+    --hashtree) FORCE_HASHTREE=true; shift ;;
     --dry-run) DRY_RUN=true; shift ;;
     -*) echo "Unknown option: $1" >&2; exit 1 ;;
     *) URL="$1"; shift ;;
@@ -173,6 +180,38 @@ if [ ${#BLOSSOM_URLS[@]} -eq 0 ]; then
   exit 1
 fi
 
+# Hashtree chunking for large files (or when forced)
+HTREE_ROOT=""
+HTREE_BIN="${HTREE:-htree}"
+USE_HASHTREE=false
+
+if [ "$FORCE_HASHTREE" = true ]; then
+  USE_HASHTREE=true
+elif [ "$FILESIZE" -ge "$HTREE_THRESHOLD" ]; then
+  USE_HASHTREE=true
+fi
+
+if [ "$USE_HASHTREE" = true ]; then
+  if command -v "$HTREE_BIN" &>/dev/null; then
+    echo ""
+    echo "[2.5] Chunking with Hashtree (file >= $(numfmt --to=iec $HTREE_THRESHOLD) or forced)..."
+    HTREE_OUTPUT=$(bash "$SCRIPT_DIR/hashtree-upload.sh" "$ARCHIVED_FILE" 2>&1) || true
+    echo "$HTREE_OUTPUT"
+    # Last line of hashtree-upload.sh output is the root hash
+    HTREE_ROOT=$(echo "$HTREE_OUTPUT" | tail -1)
+    if [ -n "$HTREE_ROOT" ] && [[ "$HTREE_ROOT" =~ ^[a-f0-9]{64}$ ]]; then
+      FILENAME=$(basename "$ARCHIVED_FILE")
+      echo "  Hashtree root: $HTREE_ROOT"
+      echo "  Viewer: https://files.iris.to/#/$HTREE_ROOT/$FILENAME"
+    else
+      echo "  WARNING: Hashtree chunking failed or returned invalid hash (non-fatal)" >&2
+      HTREE_ROOT=""
+    fi
+  else
+    echo "  NOTE: htree not installed, skipping Hashtree chunking" >&2
+  fi
+fi
+
 # Build kind 4554 event and publish
 echo ""
 echo "[3/3] Publishing kind 4554 to Nostr..."
@@ -189,6 +228,10 @@ TAG_ARGS+=(-t "size=$FILESIZE")
 [ -n "$TITLE" ] && TAG_ARGS+=(-t "title=$TITLE")
 TAG_ARGS+=(-t "archived-at=$TIMESTAMP")
 TAG_ARGS+=(-t "tool=naan")
+# Include Hashtree root if chunking was successful
+if [ -n "$HTREE_ROOT" ]; then
+  TAG_ARGS+=(-t "hashtree=$HTREE_ROOT")
+fi
 
 # nak event publishes to relays given as positional args
 nak event \
@@ -213,7 +256,7 @@ if [ "$IS_VIDEO" = true ]; then
   BLOSSOM_URLS_FILE=$(mktemp)
   printf '%s\n' "${BLOSSOM_URLS[@]}" > "$BLOSSOM_URLS_FILE"
   SCRIPT_DIR_NIP71="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  NIP71_OUTPUT=$(bash "$SCRIPT_DIR_NIP71/publish-nip71.sh" "$ARCHIVED_FILE" "$META_FILE" "$URL" "$BLOSSOM_URLS_FILE" 2>&1) || true
+  NIP71_OUTPUT=$(bash "$SCRIPT_DIR_NIP71/publish-nip71.sh" "$ARCHIVED_FILE" "$META_FILE" "$URL" "$BLOSSOM_URLS_FILE" "$HTREE_ROOT" 2>&1) || true
   echo "$NIP71_OUTPUT"
   NIP71_EVENT_ID=$(echo "$NIP71_OUTPUT" | tail -1)
   rm -f "$BLOSSOM_URLS_FILE"
@@ -241,6 +284,11 @@ echo "=== Archive Complete ==="
 echo "Event:    $EVENT_ID"
 if [ -n "$NIP71_EVENT_ID" ] && [ "$NIP71_EVENT_ID" != "null" ]; then
   echo "NIP-71:   $NIP71_EVENT_ID"
+fi
+if [ -n "$HTREE_ROOT" ]; then
+  FILENAME=$(basename "$ARCHIVED_FILE")
+  echo "Hashtree: $HTREE_ROOT"
+  echo "Viewer:   https://files.iris.to/#/$HTREE_ROOT/$FILENAME"
 fi
 echo "Blossom:  ${BLOSSOM_URLS[*]}"
 echo "Original: $URL"

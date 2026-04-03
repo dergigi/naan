@@ -10,10 +10,11 @@
 
 set -euo pipefail
 
-VIDEO_FILE="${1:?Usage: publish-nip71.sh <video_file> <meta_json> <original_url> <blossom_urls_file>}"
+VIDEO_FILE="${1:?Usage: publish-nip71.sh <video_file> <meta_json> <original_url> <blossom_urls_file> [hashtree_root]}"
 META_JSON="${2:?Missing meta_json path}"
 ORIGINAL_URL="${3:?Missing original URL}"
 BLOSSOM_URLS_FILE="${4:?Missing blossom_urls_file (one URL per line)}"
+HTREE_ROOT="${5:-}"
 
 NSEC_FILE="${NSEC_FILE:-/data/.openclaw/agents/naan/workspace/.nostr-nsec.key}"
 RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
@@ -96,6 +97,11 @@ done
 # Add thumbnail if available
 if [ -n "$THUMBNAIL" ] && [ "$THUMBNAIL" != "null" ]; then
   IMETA_PARTS="${IMETA_PARTS};image ${THUMBNAIL}"
+fi
+
+# Add Hashtree root if available (enables chunk-based streaming)
+if [ -n "$HTREE_ROOT" ]; then
+  IMETA_PARTS="${IMETA_PARTS};hashtree ${HTREE_ROOT}"
 fi
 
 # --- Build tag args ---
