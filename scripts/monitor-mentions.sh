@@ -440,6 +440,13 @@ while IFS= read -r event_json; do
 
   reply_to_note "$EVENT_ID" "$SENDER" "$(echo -e "$REPLY")"
 
+  # Summary line for cron agent
+  NAAN_NAME=$(resolve_name "$NAAN_PUBKEY")
+  echo ""
+  echo "[Done] Archived by ${NAAN_NAME}, requested by ${SENDER_NAME}"
+  echo "[Done] URL: $TARGET_URL"
+  echo "[Done] Blossom: $RESULT_BLOSSOM"
+
   mark_processed "$EVENT_ID"
   ARCHIVE_COUNT=$((ARCHIVE_COUNT + 1))
 
