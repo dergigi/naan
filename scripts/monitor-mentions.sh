@@ -36,13 +36,13 @@ RELAYS=()
 DM_RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
 
 # Access control: owner | friends | followers | follows | anyone
-ACCESS_TIER="${ACCESS_TIER:-follows}"
+ACCESS_TIER="${ACCESS_TIER:-anyone}"
 WHITELIST_FILE="${WHITELIST_FILE:-}"
 BLACKLIST_FILE="${BLACKLIST_FILE:-}"
 
 # Rate limits
-MAX_ARCHIVES_PER_RUN=3
-MAX_AGE_SECONDS=1800  # Ignore mentions older than 30 minutes
+MAX_ARCHIVES_PER_RUN=${MAX_ARCHIVES:-3}
+MAX_AGE_SECONDS=${MAX_AGE_SECONDS:-1800}  # Ignore mentions older than 30 minutes
 
 DRY_RUN=false
 SINCE=""
@@ -243,7 +243,7 @@ resolve_name() {
   local pubkey="$1"
   local name=""
   for relay in "${RELAYS[@]}"; do
-    name=$(timeout 5 nak req -k 0 -a "$pubkey" --limit 1 "$relay" 2>/dev/null | jq -r '.content' 2>/dev/null | jq -r '.display_name // .name // empty' 2>/dev/null || true)
+    name=$(timeout 5 nak req -k 0 -a "$pubkey" --limit 1 "$relay" 2>/dev/null | head -1 | jq -r '.content' 2>/dev/null | jq -r '.display_name // .name // empty' 2>/dev/null || true)
     if [ -n "$name" ]; then
       echo "$name"
       return
@@ -256,7 +256,7 @@ resolve_name() {
 # --- Extract URLs from text ---
 extract_urls() {
   local text="$1"
-  echo "$text" | grep -oP 'https?://[^\s\)"'"'"'<>]+' | head -5
+  echo "$text" | grep -oP 'https?://[^\s\)"'"'"'<>]+' | head -5 || true
 }
 
 # --- Reply to a note ---
@@ -285,7 +285,7 @@ reply_to_note() {
     -k 1 \
     "${tag_args[@]}" \
     -c "$reply_text" \
-    "${RELAYS[@]}" 2>&1
+    "${RELAYS[@]}" < /dev/null 2>&1
 }
 
 # --- Main ---
@@ -367,7 +367,7 @@ fi
 
 ARCHIVE_COUNT=0
 
-while IFS= read -r event_json; do
+while IFS= read -r event_json <&3; do
   [ -z "$event_json" ] && continue
 
   EVENT_ID=$(echo "$event_json" | jq -r '.id')
@@ -427,11 +427,11 @@ while IFS= read -r event_json; do
   echo "[Archive] Target: $TARGET_URL"
 
   # Check if already archived
-  EXISTING=$(bash "$SCRIPT_DIR/lookup-archive.sh" "$TARGET_URL" 2>/dev/null | grep -c '"id"' || true)
+  EXISTING=$(bash "$SCRIPT_DIR/lookup-archive.sh" "$TARGET_URL" < /dev/null 2>/dev/null | grep -c '"id"' || true)
   if [ "$EXISTING" -gt 0 ]; then
     echo "[Skip] URL already archived ($EXISTING existing archives)"
     # Still reply with the existing archive info
-    EXISTING_EVENT=$(nak req -k 4554 -t r="$TARGET_URL" --limit 1 "${RELAYS[0]}" 2>/dev/null | head -1 || true)
+    EXISTING_EVENT=$(nak req -k 4554 -t r="$TARGET_URL" --limit 1 "${RELAYS[0]}" < /dev/null 2>/dev/null | head -1 || true)
     if [ -n "$EXISTING_EVENT" ]; then
       EX_HASH=$(echo "$EXISTING_EVENT" | jq -r '[.tags[] | select(.[0]=="x") | .[1]] | first // "unknown"')
       EX_URL=$(echo "$EXISTING_EVENT" | jq -r '[.tags[] | select(.[0]=="url") | .[1]] | first // ""')
@@ -457,7 +457,7 @@ while IFS= read -r event_json; do
 
   # Run the archive pipeline
   echo "[Archive] Running archive pipeline..."
-  ARCHIVE_OUTPUT=$(bash "$SCRIPT_DIR/archive-url.sh" "$TARGET_URL" --requester "$SENDER" 2>&1) || {
+  ARCHIVE_OUTPUT=$(bash "$SCRIPT_DIR/archive-url.sh" "$TARGET_URL" --requester "$SENDER" < /dev/null 2>&1) || {
     echo "[Error] Archive failed for $TARGET_URL"
     echo "$ARCHIVE_OUTPUT" | tail -5
     REPLY="Archive failed for $TARGET_URL. I'll look into it."
@@ -492,7 +492,7 @@ while IFS= read -r event_json; do
   mark_processed "$EVENT_ID"
   ARCHIVE_COUNT=$((ARCHIVE_COUNT + 1))
 
-done <<< "$UNIQUE_MENTIONS"
+done 3<<< "$UNIQUE_MENTIONS"
 
 echo ""
 echo "=== Monitor Complete ==="
