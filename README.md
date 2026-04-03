@@ -7,14 +7,15 @@ NAAN nodes are agents that download, archive, and re-upload web content to [Blos
 ## How It Works
 
 ```
-URL → Download → SHA-256 → Blossom Upload → Kind 4554 Event → Nostr Relays
+URL → Download → SHA-256 → Blossom Upload → (Hashtree) → Kind 4554 Event → Nostr Relays
 ```
 
-1. **Download** — Web pages via [monolith](https://github.com/nicehash/nicehash-monolith), videos via [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+1. **Download** — Web pages via [SingleFile](https://github.com/nicehash/nicehash-monolith) or monolith, videos via [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 2. **Hash** — SHA-256 for content-addressed integrity
 3. **Upload** — Push to multiple Blossom servers for redundancy
-4. **Publish** — Announce the archive on Nostr with full metadata (kind 4554)
-5. **Discover** — Anyone can query relays for archived content by URL
+4. **Chunk** — Files over 50MB are automatically split via [Hashtree](https://hashtree.cc) for streaming and P2P delivery
+5. **Publish** — Announce the archive on Nostr with full metadata (kind 4554)
+6. **Discover** — Anyone can query relays for archived content by URL
 
 ## Scripts
 
@@ -34,6 +35,18 @@ bash scripts/archive-url.sh https://example.com/video.mp4 --video
 
 # Dry run (download only, no upload/publish)
 bash scripts/archive-url.sh https://example.com --dry-run
+
+# Force Hashtree chunking regardless of file size
+bash scripts/archive-url.sh https://example.com/large-page --hashtree
+```
+
+### `hashtree-upload.sh`
+
+Chunk a file into a Merkle tree via Hashtree and push all chunks to Blossom servers. Returns the tree root hash. Used automatically by `archive-url.sh` for files over 50MB.
+
+```bash
+bash scripts/hashtree-upload.sh large-video.mp4
+bash scripts/hashtree-upload.sh archive.html --dry-run
 ```
 
 ### `blossom-upload.sh`
@@ -86,7 +99,23 @@ NAAN extends [fiatjaf's kind 4554](https://github.com/fiatjaf/nostr-web-archiver
     ["size", "<bytes>"],
     ["title", "<content title>"],
     ["archived-at", "<unix timestamp>"],
+    ["hashtree", "<merkle tree root hash>"],
     ["tool", "naan"]
+  ]
+}
+```
+
+The `hashtree` tag is included when a file was chunked via Hashtree. Clients can use this to fetch content chunk-by-chunk from Blossom servers or via WebRTC peers, enabling streaming playback for large video archives without downloading the entire file.
+
+For video archives, NAAN also publishes NIP-71 events (kind 34235/34236) with Hashtree info in the `imeta` tag, so video clients like nostube can stream directly.
+
+```json
+{
+  "kind": 34235,
+  "tags": [
+    ["imeta", "url <blossom_url>", "m video/mp4", "x <sha256>", "size <bytes>", "hashtree <root_hash>", "fallback <mirror_url>"],
+    ["title", "Video Title"],
+    ["r", "<original URL>"]
   ]
 }
 ```
@@ -108,6 +137,7 @@ See `naan-archiver/SKILL.md` for setup instructions.
 - [monolith](https://github.com/nicehash/nicehash-monolith) — single-file HTML archiving
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — video downloading
 - [nak](https://github.com/fiatjaf/nak) — Nostr signing and publishing
+- [htree](https://github.com/mmalmi/hashtree-rs) — Hashtree CLI for chunked storage (optional, for files >50MB)
 - `curl`, `jq`, `sha256sum` — standard tools
 - A Nostr keypair (nsec)
 - Access to Blossom servers for upload
