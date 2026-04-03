@@ -1,0 +1,44 @@
+# naan.conf — NAAN Archiver Configuration
+# Copy to your workspace root and edit as needed.
+
+# Required: path to Nostr secret key (nsec1... or hex)
+NSEC_FILE="/path/to/.nostr-nsec.key"
+
+# Optional: operator's pubkey (hex). If set, relays and Blossom servers
+# are auto-discovered from kind 10002 and kind 10063 events.
+OPERATOR_PUBKEY=""
+
+# Optional: owner pubkey for access control (who can request archives)
+OWNER_PUBKEY=""
+
+# --- Access Control ---
+# Who can request archives via mentions/DMs:
+#   owner     - only the owner pubkey
+#   friends   - mutual follows (owner follows them AND they follow owner)
+#   followers - anyone who follows the owner
+#   follows   - anyone the owner follows (default)
+#   anyone    - open to all pubkeys
+ACCESS_TIER="follows"
+
+# Optional: always allow specific pubkeys regardless of tier (one hex pubkey per line)
+WHITELIST_FILE=""
+
+# Optional: always deny specific pubkeys regardless of tier (one hex pubkey per line)
+BLACKLIST_FILE=""
+
+# Evaluation order:
+#   1. Blacklist (deny)
+#   2. Whitelist (allow)
+#   3. Owner pubkey (allow)
+#   4. Access tier
+
+# --- Servers & Relays ---
+# Overrides (used if auto-discovery fails or OPERATOR_PUBKEY is unset)
+BLOSSOM_SERVERS="https://blossom.primal.net https://cdn.hzrd149.com"
+RELAYS="wss://relay.damus.io wss://relay.primal.net wss://nos.lol"
+
+# --- Storage ---
+ARCHIVE_DIR="./archives"
+
+# --- Tools ---
+CHROME_PATH="/usr/bin/chromium"

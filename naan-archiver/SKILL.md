@@ -17,12 +17,19 @@ Create `naan.conf` in the workspace root:
 # Required: path to Nostr secret key (nsec1... or hex)
 NSEC_FILE="/path/to/.nostr-nsec.key"
 
-# Optional: operator's npub (hex). If set, relays and Blossom servers
+# Optional: operator's pubkey (hex). If set, relays and Blossom servers
 # are auto-discovered from kind 10002 and kind 10063 events.
 OPERATOR_PUBKEY=""
 
-# Optional: owner pubkey for WoT gating (who can request archives via mentions)
+# Optional: owner pubkey for access control
 OWNER_PUBKEY=""
+
+# Who can request archives: owner | friends | followers | follows | anyone
+ACCESS_TIER="follows"
+
+# Optional: always allow/deny specific pubkeys (one hex pubkey per line)
+WHITELIST_FILE=""
+BLACKLIST_FILE=""
 
 # Overrides (used if auto-discovery fails or OPERATOR_PUBKEY is unset)
 BLOSSOM_SERVERS="https://blossom.primal.net https://cdn.hzrd149.com"
@@ -103,11 +110,30 @@ See `references/event-spec.md` for the full kind 4554 archive event schema and k
 
 ## Access Control
 
-Three modes (set by configuring `OWNER_PUBKEY` in `naan.conf`):
+Configure `ACCESS_TIER` in `naan.conf` to control who can request archives:
 
-1. **Owner only** (default): only DMs/mentions from the operator trigger archiving
-2. **Follows**: anyone the owner follows (kind 3 contact list) can request archives
-3. **Open**: leave `OWNER_PUBKEY` blank to accept from anyone (not recommended)
+| Tier | Who can request |
+|------|----------------|
+| `owner` | Only the owner pubkey |
+| `friends` | Mutual follows (owner follows them AND they follow the owner) |
+| `followers` | Anyone who follows the owner |
+| `follows` | Anyone the owner follows (default) |
+| `anyone` | Open to all pubkeys (not recommended for public nodes) |
+
+The owner is always allowed regardless of tier. Evaluation order:
+
+1. **Blacklist** (always deny)
+2. **Whitelist** (always allow)
+3. **Owner** (always allow)
+4. **Access tier** (evaluated per above)
+
+Optional whitelist/blacklist files contain one hex pubkey per line:
+
+```bash
+ACCESS_TIER="follows"
+WHITELIST_FILE="./whitelist.txt"
+BLACKLIST_FILE="./blacklist.txt"
+```
 
 ## Deploy Archive Index
 
