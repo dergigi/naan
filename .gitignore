@@ -18,6 +18,12 @@ archives/
 # Mention monitor state
 .mention-state/
 
+# Skill build artifacts
+*.skill
+
+# Config (may contain secrets)
+naan.conf
+
 # OS
 .DS_Store
 *.swp
