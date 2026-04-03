@@ -97,6 +97,12 @@ Query any relay for archives of a URL:
 nak req -k 4554 -t r="https://example.com" wss://relay.damus.io
 ```
 
+## OpenClaw Skill
+
+NAAN is packaged as an [OpenClaw](https://openclaw.ai) skill in `naan-archiver/`. Any OpenClaw agent can install it to become an archival node. The skill auto-discovers Blossom servers and relays from the operator's Nostr metadata (kind 10063 and kind 10002), so configuration is minimal: provide an nsec and optionally an operator pubkey.
+
+See `naan-archiver/SKILL.md` for setup instructions.
+
 ## Requirements
 
 - [monolith](https://github.com/nicehash/nicehash-monolith) — single-file HTML archiving
