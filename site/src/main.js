@@ -43,7 +43,7 @@ const otsProofs = new Map();
 
 // UI mode: "browse" (feed + text filter) or "lookup" (URL archive history)
 let currentMode = "browse";
-let activeFilter = "all"; // "all" | "pages" | "videos"
+let activeFilter = "pages"; // "all" | "pages" | "videos"
 
 // Lookup state
 let lookupEvents = [];
