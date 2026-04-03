@@ -25,7 +25,7 @@ DM_RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
 
 # Rate limits
 MAX_ARCHIVES_PER_RUN=3
-MAX_AGE_SECONDS=600  # Ignore mentions older than 10 minutes
+MAX_AGE_SECONDS=1800  # Ignore mentions older than 30 minutes
 
 DRY_RUN=false
 SINCE=""
