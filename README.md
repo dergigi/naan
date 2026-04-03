@@ -45,6 +45,21 @@ bash scripts/blossom-upload.sh archive.html
 bash scripts/blossom-upload.sh video.mp4 https://cdn.hzrd149.com
 ```
 
+### `monitor-mentions.sh`
+
+Monitor public Nostr mentions tagging NAAN and auto-archive URLs. Access is gated by Gigi's Web of Trust (kind 3 follow list): only Gigi and accounts Gigi follows can trigger archives.
+
+```bash
+# Run the monitor (processes mentions from the last 10 minutes)
+bash scripts/monitor-mentions.sh
+
+# Dry run (show what would be archived without doing it)
+bash scripts/monitor-mentions.sh --dry-run
+
+# Check mentions since a specific timestamp
+bash scripts/monitor-mentions.sh --since 1712100000
+```
+
 ### `lookup-archive.sh`
 
 Check if a URL has already been archived on Nostr.
