@@ -296,6 +296,7 @@ function renderArchiveCard(event) {
     const size = videoMeta.size || "";
     const hash = videoMeta.x || "";
     const mime = videoMeta.m || "";
+    const hashtreeRoot = videoMeta.hashtree || getTag(event, "hashtree") || "";
     const fallbacks = videoMeta.fallbacks || [];
     const allUrls = [videoUrl, ...fallbacks].filter(Boolean);
 
@@ -327,12 +328,14 @@ function renderArchiveCard(event) {
         ${size ? `<span class="tag">${formatBytes(size)}</span>` : ""}
         ${durationStr ? `<span class="tag">⏱ ${durationStr}</span>` : ""}
         ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
+        ${hashtreeRoot ? `<span class="tag hashtree" title="Chunked via Hashtree for P2P streaming">🌲 chunked</span>` : ""}
         <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
       </div>
       ${hashtags.length > 0 ? `<div class="archive-meta">${hashtags.slice(0, 8).map((t) => `<span class="tag hashtag">#${escapeHtml(t)}</span>`).join("")}</div>` : ""}
-      ${allUrls.length > 0 ? `
+      ${allUrls.length > 0 || hashtreeRoot ? `
         <div class="archive-links">
           ${allUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}
+          ${hashtreeRoot ? `<a href="https://files.iris.to/#/${escapeHtml(hashtreeRoot)}/${escapeHtml(videoUrl.split('/').pop() || hash + '.mp4')}" target="_blank">🌲 Stream via Hashtree</a>` : ""}
         </div>` : ""}
       ${origin ? `<div class="archive-origin">via ${escapeHtml(origin[1])}${origin[3] ? ` · <a href="${escapeHtml(origin[3])}" target="_blank">original</a>` : ""}</div>` : ""}
       <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
@@ -345,6 +348,7 @@ function renderArchiveCard(event) {
   const mime = getTag(event, "m");
   const tool = getTag(event, "tool");
   const hash = getTag(event, "x");
+  const hashtreeRoot = getTag(event, "hashtree");
   const archivedAt = getTag(event, "archived-at");
   const displayDate = archivedAt ? formatDate(parseInt(archivedAt)) : formatDate(event.created_at);
   const displayTitle = escapeHtml(title || originalUrl || "Untitled Archive");
@@ -364,11 +368,13 @@ function renderArchiveCard(event) {
       ${size ? `<span class="tag">${formatBytes(size)}</span>` : ""}
       ${tool ? `<span class="tag tool">${escapeHtml(tool)}</span>` : ""}
       ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
+      ${hashtreeRoot ? `<span class="tag hashtree" title="Chunked via Hashtree for streaming">🌲 chunked</span>` : ""}
       <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
     </div>
-    ${blossomUrls.length > 0 ? `
+    ${blossomUrls.length > 0 || hashtreeRoot ? `
       <div class="archive-links">
         ${blossomUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}
+        ${hashtreeRoot ? (() => { const fn = blossomUrls.length > 0 ? blossomUrls[0].split('/').pop() : (hash ? hash + '.' + (format || 'bin') : ''); return `<a href="https://files.iris.to/#/${escapeHtml(hashtreeRoot)}/${escapeHtml(fn)}" target="_blank">🌲 Hashtree viewer</a>`; })() : ""}
       </div>` : ""}
     <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
   </div>`;
@@ -685,6 +691,7 @@ function renderSnapshotList(filterDate) {
       const size = videoMeta.size || "";
       const mime = videoMeta.m || "";
       const hash = videoMeta.x || "";
+      const htRoot = videoMeta.hashtree || getTag(event, "hashtree") || "";
       const duration = getTag(event, "duration");
       const durationStr = formatDuration(duration);
       const fallbacks = videoMeta.fallbacks || [];
@@ -701,9 +708,10 @@ function renderSnapshotList(filterDate) {
           ${size ? `<span class="tag">${formatBytes(size)}</span>` : ""}
           ${durationStr ? `<span class="tag">⏱ ${durationStr}</span>` : ""}
           ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
+          ${htRoot ? `<span class="tag hashtree" title="Chunked via Hashtree">🌲 chunked</span>` : ""}
           <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
         </div>
-        ${allUrls.length > 0 ? `<div class="archive-links">${allUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}</div>` : ""}
+        ${allUrls.length > 0 || htRoot ? `<div class="archive-links">${allUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}${htRoot ? ` <a href="https://files.iris.to/#/${escapeHtml(htRoot)}/${escapeHtml(videoUrl.split('/').pop() || hash + '.mp4')}" target="_blank">🌲 Stream</a>` : ""}</div>` : ""}
         <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
       </div>`;
     }
@@ -714,6 +722,7 @@ function renderSnapshotList(filterDate) {
     const mime = getTag(event, "m");
     const tool = getTag(event, "tool");
     const hash = getTag(event, "x");
+    const htRoot = getTag(event, "hashtree");
     const displayTitle = escapeHtml(title || "Snapshot");
 
     return `
@@ -726,9 +735,10 @@ function renderSnapshotList(filterDate) {
         ${size ? `<span class="tag">${formatBytes(size)}</span>` : ""}
         ${tool ? `<span class="tag tool">${escapeHtml(tool)}</span>` : ""}
         ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
+        ${htRoot ? `<span class="tag hashtree" title="Chunked via Hashtree">🌲 chunked</span>` : ""}
         <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
       </div>
-      ${blossomUrls.length > 0 ? `<div class="archive-links">${blossomUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}</div>` : ""}
+      ${blossomUrls.length > 0 || htRoot ? `<div class="archive-links">${blossomUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}${htRoot ? ` <a href="https://files.iris.to/#/${escapeHtml(htRoot)}/${escapeHtml(blossomUrls.length > 0 ? blossomUrls[0].split('/').pop() : (hash || '') + '.' + (format || 'bin'))}" target="_blank">🌲 Hashtree</a>` : ""}</div>` : ""}
       <div class="archive-pubkey" data-pubkey="${event.pubkey}">by ${escapeHtml(profileName)}</div>
     </div>`;
   }).join("");

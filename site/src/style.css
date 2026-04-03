@@ -191,6 +191,7 @@ main {
 .tag.format { color: var(--accent); }
 .tag.tool { color: var(--green); }
 .tag.ots { color: #f7931a; background: rgba(247, 147, 26, 0.12); }
+.tag.hashtree { color: #2d8a4e; background: rgba(45, 138, 78, 0.12); }
 .tag.hashtag { color: var(--link); }
 
 .archive-links {
