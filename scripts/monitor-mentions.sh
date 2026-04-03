@@ -408,12 +408,54 @@ while IFS= read -r event_json <&3; do
   echo "[Mention] Content: $CONTENT"
   echo "[Mention] Event: $EVENT_ID"
 
-  # Extract URLs
+  # Extract URLs from the mention itself
   URLS=$(extract_urls "$CONTENT")
+
+  # If no URLs found, check if this is a reply and fetch the parent note
   if [ -z "$URLS" ]; then
-    echo "[Skip] No URLs in mention"
-    mark_processed "$EVENT_ID"
-    continue
+    echo "[Parent] No URLs in mention, checking for parent note..."
+
+    # Try reply tag first, then root tag (NIP-10 markers)
+    PARENT_ID=""
+    PARENT_ID=$(echo "$event_json" | jq -r '
+      # First try marked tags (NIP-10 recommended)
+      ([.tags[] | select(.[0]=="e" and .[3]=="reply") | .[1]] | first) //
+      ([.tags[] | select(.[0]=="e" and .[3]=="root") | .[1]] | first) //
+      # Fallback: positional e tags (last e tag = reply, first = root)
+      ([ .tags[] | select(.[0]=="e") | .[1] ] | if length > 1 then .[-1] elif length == 1 then .[0] else null end) //
+      empty
+    ' 2>/dev/null || true)
+
+    if [ -z "$PARENT_ID" ] || [ "$PARENT_ID" = "null" ]; then
+      echo "[Skip] No URLs and not a reply"
+      mark_processed "$EVENT_ID"
+      continue
+    fi
+
+    echo "[Parent] Fetching parent event: $PARENT_ID"
+    PARENT_EVENT=""
+    for relay in "${RELAYS[@]}"; do
+      PARENT_EVENT=$(nak req --id "$PARENT_ID" --limit 1 "$relay" 2>/dev/null | head -1 || true)
+      if [ -n "$PARENT_EVENT" ]; then
+        break
+      fi
+    done
+
+    if [ -z "$PARENT_EVENT" ]; then
+      echo "[Skip] Could not fetch parent event $PARENT_ID"
+      mark_processed "$EVENT_ID"
+      continue
+    fi
+
+    PARENT_CONTENT=$(echo "$PARENT_EVENT" | jq -r '.content')
+    URLS=$(extract_urls "$PARENT_CONTENT")
+    if [ -z "$URLS" ]; then
+      echo "[Skip] No URLs in parent note either"
+      mark_processed "$EVENT_ID"
+      continue
+    fi
+
+    echo "[Parent] Found URLs in parent note: $(echo "$URLS" | tr '\n' ' ')"
   fi
 
   # Rate limit
