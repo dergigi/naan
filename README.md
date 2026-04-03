@@ -171,7 +171,7 @@ See [RESEARCH.md](RESEARCH.md) for the full design document.
 ## Inspired By
 
 - **[Nostr Web Archiver](https://github.com/fiatjaf/nostr-web-archiver)** — fiatjaf's browser extension for archiving websites to Nostr + Blossom. Pioneered the idea of publishing web archives as Nostr events.
-- **[ArchiveBox](https://archivebox.io/)** — Self-hosted internet archiving. Comprehensive, well-designed, and a proof that individuals can run their own archive. NAAN takes the same spirit and makes it decentralized.
+- **[ArchiveBox](https://archivebox.io/)** — Self-hosted internet archiving. Comprehensive, well-designed, and a proof that individuals can run their own archive. NAAN takes the same spirit and pushes it to Nostr, which brings syndication.
 - **[Internet Archive](https://archive.org/)** — The original. Decades of preservation work. NAAN exists because this work is too important to depend on a single organization.
 
 ## License
