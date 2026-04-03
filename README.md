@@ -10,7 +10,7 @@ NAAN nodes are agents that download, archive, and re-upload web content to [Blos
 URL → Download → SHA-256 → Blossom Upload → (Hashtree) → Kind 4554 Event → Nostr Relays
 ```
 
-1. **Download** — Web pages via [SingleFile](https://github.com/nicehash/nicehash-monolith) or monolith, videos via [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+1. **Download** — Web pages via [SingleFile](https://github.com/nicehash/nicehash-monolith) (headless Chrome), videos via [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 2. **Hash** — SHA-256 for content-addressed integrity
 3. **Upload** — Push to multiple Blossom servers for redundancy
 4. **Chunk** — Files over 50MB are automatically split via [Hashtree](https://hashtree.cc) for streaming and P2P delivery
@@ -134,7 +134,6 @@ See `naan-archiver/SKILL.md` for setup instructions.
 
 ## Requirements
 
-- [monolith](https://github.com/nicehash/nicehash-monolith) — single-file HTML archiving
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — video downloading
 - [nak](https://github.com/fiatjaf/nak) — Nostr signing and publishing
 - [htree](https://github.com/mmalmi/hashtree-rs) — Hashtree CLI for chunked storage (optional, for files >50MB)

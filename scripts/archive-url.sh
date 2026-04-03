@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 # archive-url.sh — Archive a URL (web page or video), upload to Blossom, publish kind 4554
-# Usage: archive-url.sh <url> [--video] [--monolith] [--hashtree] [--requester <pubkey>] [--dry-run]
+# Usage: archive-url.sh <url> [--video] [--hashtree] [--requester <pubkey>] [--dry-run]
 #
 # Pipeline: SingleFile → Blossom upload → (Hashtree) → Kind 4554 → OpenTimestamps
 #
 # Files over 50MB are automatically chunked via Hashtree for streaming support.
 # Use --hashtree to force Hashtree chunking regardless of file size.
 #
-# Web pages are archived with SingleFile (headless Chrome) by default.
-# Use --monolith to fall back to monolith (no browser needed, lighter).
+# Web pages are archived with SingleFile (headless Chrome).
 # Video URLs are auto-detected and downloaded with yt-dlp.
 #
 # Requires: single-file, chromium, yt-dlp, nak, curl, jq, ots
-# Optional: monolith (fallback), htree (hashtree-cli for chunked storage)
+# Optional: htree (hashtree-cli for chunked storage)
 # Env: NSEC_FILE (path to nsec key)
 
 set -euo pipefail
@@ -28,7 +27,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 URL=""
 IS_VIDEO=false
-USE_MONOLITH=false
 FORCE_HASHTREE=false
 DRY_RUN=false
 REQUESTER_PUBKEY=""
@@ -36,7 +34,6 @@ REQUESTER_PUBKEY=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --video) IS_VIDEO=true; shift ;;
-    --monolith) USE_MONOLITH=true; shift ;;
     --hashtree) FORCE_HASHTREE=true; shift ;;
     --requester) REQUESTER_PUBKEY="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
@@ -46,7 +43,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$URL" ]; then
-  echo "Usage: archive-url.sh <url> [--video] [--monolith] [--dry-run]" >&2
+  echo "Usage: archive-url.sh <url> [--video] [--hashtree] [--requester <pubkey>] [--dry-run]" >&2
   exit 1
 fi
 
@@ -89,13 +86,6 @@ if [ "$IS_VIDEO" = true ]; then
   TITLE=$(jq -r '.title // empty' "$META_FILE" 2>/dev/null || echo "")
   FORMAT="mp4"
 
-elif [ "$USE_MONOLITH" = true ]; then
-  ARCHIVED_FILE="${ARCHIVE_DIR}/${SAFE_NAME}_${TIMESTAMP}.html"
-  echo "[1/3] Saving web page with monolith..."
-  monolith "$URL" --timeout 30 -o "$ARCHIVED_FILE" 2>&1
-  TITLE=$(grep -oP '<title[^>]*>\K[^<]+' "$ARCHIVED_FILE" 2>/dev/null | head -1 || echo "")
-  FORMAT="html"
-
 else
   ARCHIVED_FILE="${ARCHIVE_DIR}/${SAFE_NAME}_${TIMESTAMP}.html"
   echo "[1/3] Saving web page with SingleFile (headless Chrome)..."
@@ -107,10 +97,9 @@ else
     --browser-capture-max-time 30000 \
     "$URL" "$ARCHIVED_FILE" 2>&1
 
-  # SingleFile may not produce output on failure, fall back to monolith
   if [ ! -f "$ARCHIVED_FILE" ] || [ ! -s "$ARCHIVED_FILE" ]; then
-    echo "  SingleFile failed, falling back to monolith..."
-    monolith "$URL" --timeout 30 -o "$ARCHIVED_FILE" 2>&1
+    echo "ERROR: SingleFile failed to archive $URL" >&2
+    exit 1
   fi
 
   TITLE=$(grep -oP '<title[^>]*>\K[^<]+' "$ARCHIVED_FILE" 2>/dev/null | head -1 || echo "")

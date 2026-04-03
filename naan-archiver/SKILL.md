@@ -45,7 +45,7 @@ Falls back to `BLOSSOM_SERVERS` and `RELAYS` if discovery returns nothing.
 ### 2. Dependencies
 
 Required: `nak`, `curl`, `jq`, `sha256sum`
-Web archiving: `single-file-cli` + Chromium (primary), `monolith` (fallback)
+Web archiving: `single-file-cli` + Chromium
 Video archiving: `yt-dlp`
 Timestamping: `ots` (github.com/fiatjaf/ots)
 
@@ -54,7 +54,7 @@ Timestamping: `ots` (github.com/fiatjaf/ots)
 ### Archive a URL
 
 ```bash
-bash scripts/archive-url.sh <url> [--video] [--monolith] [--dry-run]
+bash scripts/archive-url.sh <url> [--video] [--requester <pubkey>] [--dry-run]
 ```
 
 Full pipeline: download content, compute SHA-256, upload to Blossom servers, publish kind 4554 event, submit to OpenTimestamps. Auto-detects video URLs (YouTube, Vimeo, Twitter/X, TikTok, Rumble).

@@ -1,25 +1,24 @@
 #!/usr/bin/env bash
 # archive-url.sh — Archive a URL, upload to Blossom, publish kind 4554, stamp with OTS
-# Usage: archive-url.sh <url> [--video] [--monolith] [--dry-run]
+# Usage: archive-url.sh <url> [--video] [--requester <pubkey>] [--dry-run]
 #
-# Pipeline: SingleFile/monolith/yt-dlp → Blossom upload → Kind 4554 → OpenTimestamps
+# Pipeline: SingleFile/yt-dlp → Blossom upload → Kind 4554 → OpenTimestamps
 #
 # Configuration: naan.conf in workspace root (see SKILL.md for format)
-# Requires: nak, curl, jq, sha256sum
-# Web: single-file-cli + chromium (default) or monolith (--monolith)
+# Requires: nak, curl, jq, sha256sum, single-file-cli + chromium
 # Video: yt-dlp
 
 source "$(dirname "$0")/naan-common.sh"
 
 URL=""
 IS_VIDEO=false
-USE_MONOLITH=false
 DRY_RUN=false
+REQUESTER_PUBKEY=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --video) IS_VIDEO=true; shift ;;
-    --monolith) USE_MONOLITH=true; shift ;;
+    --requester) REQUESTER_PUBKEY="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
     -*) echo "Unknown option: $1" >&2; exit 1 ;;
     *) URL="$1"; shift ;;
@@ -27,7 +26,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$URL" ]; then
-  echo "Usage: archive-url.sh <url> [--video] [--monolith] [--dry-run]" >&2
+  echo "Usage: archive-url.sh <url> [--video] [--requester <pubkey>] [--dry-run]" >&2
   exit 1
 fi
 
@@ -67,32 +66,20 @@ if [ "$IS_VIDEO" = true ]; then
   TITLE=$(jq -r '.title // empty' "$META_FILE" 2>/dev/null || echo "")
   FORMAT="mp4"
 
-elif [ "$USE_MONOLITH" = true ]; then
-  ARCHIVED_FILE="${ARCHIVE_DIR}/${SAFE_NAME}_${TIMESTAMP}.html"
-  echo "[1/4] Saving web page with monolith..."
-  monolith "$URL" --timeout 30 -o "$ARCHIVED_FILE" 2>&1
-  TITLE=$(grep -oP '<title[^>]*>\K[^<]+' "$ARCHIVED_FILE" 2>/dev/null | head -1 || echo "")
-  FORMAT="html"
-
 else
   ARCHIVED_FILE="${ARCHIVE_DIR}/${SAFE_NAME}_${TIMESTAMP}.html"
   echo "[1/4] Saving web page with SingleFile (headless Chrome)..."
-  if command -v single-file &>/dev/null; then
-    single-file \
-      --browser-executable-path "$CHROME_PATH" \
-      --browser-arg "--no-sandbox" \
-      --browser-wait-until "networkIdle" \
-      --browser-load-max-time 30000 \
-      --browser-capture-max-time 30000 \
-      "$URL" "$ARCHIVED_FILE" 2>&1 || true
+  single-file \
+    --browser-executable-path "$CHROME_PATH" \
+    --browser-arg "--no-sandbox" \
+    --browser-wait-until "networkIdle" \
+    --browser-load-max-time 30000 \
+    --browser-capture-max-time 30000 \
+    "$URL" "$ARCHIVED_FILE" 2>&1
 
-    if [ ! -f "$ARCHIVED_FILE" ] || [ ! -s "$ARCHIVED_FILE" ]; then
-      echo "  SingleFile failed, falling back to monolith..."
-      monolith "$URL" --timeout 30 -o "$ARCHIVED_FILE" 2>&1
-    fi
-  else
-    echo "  SingleFile not found, using monolith..."
-    monolith "$URL" --timeout 30 -o "$ARCHIVED_FILE" 2>&1
+  if [ ! -f "$ARCHIVED_FILE" ] || [ ! -s "$ARCHIVED_FILE" ]; then
+    echo "ERROR: SingleFile failed to archive $URL" >&2
+    exit 1
   fi
 
   TITLE=$(grep -oP '<title[^>]*>\K[^<]+' "$ARCHIVED_FILE" 2>/dev/null | head -1 || echo "")
@@ -180,6 +167,10 @@ TAG_ARGS+=(-t "size=$FILESIZE")
 [ -n "$TITLE" ] && TAG_ARGS+=(-t "title=$TITLE")
 TAG_ARGS+=(-t "archived-at=$TIMESTAMP")
 TAG_ARGS+=(-t "tool=naan")
+# Include requester pubkey if provided
+if [ -n "$REQUESTER_PUBKEY" ]; then
+  TAG_ARGS+=(-t "p=${REQUESTER_PUBKEY};;requester")
+fi
 
 nak event \
   --sec "$NSEC" \

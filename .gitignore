@@ -31,3 +31,5 @@ naan.conf
 # Memory (agent-specific, may contain private info)
 memory/
 .vercel
+naan/
+naan-site/
