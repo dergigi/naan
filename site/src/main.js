@@ -73,10 +73,11 @@ function renderAttribution(event) {
   const profileName = getProfileName(event.pubkey);
   const requester = getRequesterPubkey(event);
   if (requester && requester !== event.pubkey) {
+    subscribeToProfile(requester);
     const reqName = getProfileName(requester);
-    return `<div class="archive-pubkey">by <span data-pubkey="${event.pubkey}">${escapeHtml(profileName)}</span>, requested by <span data-pubkey="${requester}">${escapeHtml(reqName)}</span></div>`;
+    return `<div class="archive-pubkey">archived by <span data-pubkey="${event.pubkey}">${escapeHtml(profileName)}</span>, requested by <span data-pubkey="${requester}">${escapeHtml(reqName)}</span></div>`;
   }
-  return `<div class="archive-pubkey">by <span data-pubkey="${event.pubkey}">${escapeHtml(profileName)}</span></div>`;
+  return `<div class="archive-pubkey">archived by <span data-pubkey="${event.pubkey}">${escapeHtml(profileName)}</span></div>`;
 }
 
 function formatBytes(bytes) {
