@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-03
+
+### Added
+
+- Hashtree integration for chunked storage and video streaming. Files over 50MB are automatically split into a Merkle tree of chunks via `htree`, pushed to Blossom servers, and the tree root hash is included in kind 4554 archive events (`hashtree` tag) and NIP-71 video event `imeta` tags. This enables chunk-based P2P streaming through Hashtree-aware clients without downloading the entire file.
+- New `hashtree-upload.sh` script for chunking files and pushing chunks to multiple Blossom servers.
+- `--hashtree` flag on `archive-url.sh` to force Hashtree chunking regardless of file size.
+- Archive index site now shows a green "🌲 chunked" badge and Hashtree viewer links (files.iris.to) for archives and videos with Hashtree data, in both browse and URL lookup views.
+
 ## [0.2.0] - 2026-04-03
 
 ### Added
@@ -89,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tags: `url`, `r`, `x` (SHA-256), `m` (MIME), `format`, `size`, `title`, `archived-at`, `tool`
 - Uploads to multiple Blossom servers for redundancy
 
+[0.3.0]: https://github.com/dergigi/naan/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dergigi/naan/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/dergigi/naan/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/dergigi/naan/compare/v0.0.4...v0.1.0
