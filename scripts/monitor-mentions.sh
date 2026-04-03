@@ -6,6 +6,9 @@
 # access tiers (owner/friends/followers/follows/anyone), extracts URLs,
 # archives them, and replies publicly.
 #
+# Uses NIP-65 relay discovery (kind 10002) to find NAAN's inbox relays and
+# sender outbox relays, falling back to seed relays if discovery fails.
+#
 # Requires: nak, jq, curl, bash scripts in scripts/
 
 set -euo pipefail
@@ -15,13 +18,21 @@ WORKSPACE_DIR="$(dirname "$SCRIPT_DIR")"
 STATE_DIR="$WORKSPACE_DIR/.mention-state"
 NSEC_FILE="${NSEC_FILE:-$WORKSPACE_DIR/.nostr-nsec.key}"
 
+# Source NIP-65 relay discovery
+# shellcheck source=relay-discovery.sh
+source "$SCRIPT_DIR/relay-discovery.sh"
+
 # NAAN identity
 NAAN_PUBKEY="d1ee2f8ee60e7b2496176963e9f710ca476c456f5f9be2bbe3b4f1e6c62052ff"
 
 # Gigi's pubkey (always allowed as owner)
 OWNER_PUBKEY="6e468422dfb74a5738702a8823b9b28168abab8655faacb6853cd0ee15deee93"
 
-RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol" "wss://wot.dergigi.com" "wss://haven.dergigi.com" "wss://relay.dergigi.com")
+# Seed relays (used as baseline alongside NIP-65 discovered relays)
+SEED_RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol" "wss://wot.dergigi.com" "wss://haven.dergigi.com" "wss://relay.dergigi.com")
+
+# RELAYS array will be built dynamically from NIP-65 + seeds
+RELAYS=()
 DM_RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
 
 # Access control: owner | friends | followers | follows | anyone
@@ -281,6 +292,37 @@ reply_to_note() {
 echo "=== NAAN Mention Monitor ==="
 echo "Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 echo "Access tier: $ACCESS_TIER"
+echo ""
+
+# --- NIP-65 relay discovery ---
+# Build relay list dynamically from NAAN's kind 10002 inbox relays + seeds
+echo "[NIP-65] Discovering NAAN's inbox relays..."
+INBOX_RELAYS=()
+while IFS= read -r relay_url; do
+  [ -n "$relay_url" ] && INBOX_RELAYS+=("$relay_url")
+done < <(discover_inbox_relays "$NAAN_PUBKEY" 2>/dev/null || true)
+
+if [ ${#INBOX_RELAYS[@]} -gt 0 ]; then
+  echo "[NIP-65] Found ${#INBOX_RELAYS[@]} inbox relays from kind 10002"
+  for r in "${INBOX_RELAYS[@]}"; do
+    echo "  - $r"
+  done
+else
+  echo "[NIP-65] No inbox relays found, using seed relays only"
+fi
+
+# Merge inbox relays + seed relays (deduplicated)
+declare -A _seen_relays
+for r in "${INBOX_RELAYS[@]}" "${SEED_RELAYS[@]}"; do
+  normalized=$(echo "$r" | sed 's|/$||')
+  if [ -z "${_seen_relays[$normalized]+x}" ]; then
+    RELAYS+=("$normalized")
+    _seen_relays["$normalized"]=1
+  fi
+done
+unset _seen_relays
+
+echo "[NIP-65] Monitoring ${#RELAYS[@]} relays total"
 echo ""
 
 fetch_follow_list
