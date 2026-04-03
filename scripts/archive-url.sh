@@ -205,9 +205,23 @@ EVENT_ID=$(nak event \
   -c "" \
   --ts "$TIMESTAMP" 2>/dev/null | jq -r '.id')
 
+# Publish NIP-71 video event (kind 34235/34236) for video archives
+NIP71_EVENT_ID=""
+if [ "$IS_VIDEO" = true ]; then
+  echo ""
+  echo "[4/5] Publishing NIP-71 video event..."
+  BLOSSOM_URLS_FILE=$(mktemp)
+  printf '%s\n' "${BLOSSOM_URLS[@]}" > "$BLOSSOM_URLS_FILE"
+  SCRIPT_DIR_NIP71="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  NIP71_OUTPUT=$(bash "$SCRIPT_DIR_NIP71/publish-nip71.sh" "$ARCHIVED_FILE" "$META_FILE" "$URL" "$BLOSSOM_URLS_FILE" 2>&1) || true
+  echo "$NIP71_OUTPUT"
+  NIP71_EVENT_ID=$(echo "$NIP71_OUTPUT" | tail -1)
+  rm -f "$BLOSSOM_URLS_FILE"
+fi
+
 # Submit to OpenTimestamps (NIP-03)
 echo ""
-echo "[4/4] Submitting to OpenTimestamps..."
+echo "[$([ "$IS_VIDEO" = true ] && echo "5/5" || echo "4/4")] Submitting to OpenTimestamps..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if bash "$SCRIPT_DIR/ots-stamp.sh" "$EVENT_ID" 2>&1; then
   echo "  OTS proof pending — run ots-upgrade.sh later to finalize"
@@ -215,9 +229,19 @@ else
   echo "  WARNING: OTS stamping failed (non-fatal)" >&2
 fi
 
+# Also stamp the NIP-71 event if it was published
+if [ -n "$NIP71_EVENT_ID" ] && [ "$NIP71_EVENT_ID" != "null" ]; then
+  if bash "$SCRIPT_DIR/ots-stamp.sh" "$NIP71_EVENT_ID" 2>&1; then
+    echo "  NIP-71 event OTS proof pending"
+  fi
+fi
+
 echo ""
 echo "=== Archive Complete ==="
 echo "Event:    $EVENT_ID"
+if [ -n "$NIP71_EVENT_ID" ] && [ "$NIP71_EVENT_ID" != "null" ]; then
+  echo "NIP-71:   $NIP71_EVENT_ID"
+fi
 echo "Blossom:  ${BLOSSOM_URLS[*]}"
 echo "Original: $URL"
 echo "OTS:      pending (run ots-upgrade.sh --publish to finalize)"
