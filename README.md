@@ -148,6 +148,7 @@ NAAN builds on existing Nostr infrastructure:
 - **[Blossom](https://github.com/hzrd149/blossom)** — Content-addressed blob storage (BUD-01 through BUD-11)
 - **[Nostr Web Archiver](https://github.com/fiatjaf/nostr-web-archiver)** — fiatjaf's Chrome extension for WACZ archiving (kind 4554 origin)
 - **[Hashtree](https://hashtree.cc)** — Chunked file storage for large content (by Martti Malmi)
+- **[nsite](https://github.com/nicehash/nsyte)** — Deploy websites to Nostr + Blossom. Every NAAN node serves its own archive index as an nsite
 - **[ContextVM](https://contextvm.org)** — MCP over Nostr for agent-to-agent coordination (future)
 
 ## Vision
