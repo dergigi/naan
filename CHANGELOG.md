@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2026-04-03
+
+### Added
+
+- Wayback Machine-style URL lookup view. A new "Lookup URL" tab lets users search for a specific URL and see its full archive history: a timeline bar chart showing monthly archive density, a 12-month calendar grid with colored snapshot dots (intensity scales with snapshot count), and a clickable snapshot list. Clicking a calendar day filters to that date's snapshots.
+- Calendar year navigation with previous/next buttons.
+- URL variant matching (http/https, trailing slash) for broader lookup results.
+- Responsive calendar grid: 4 columns on desktop, 3 on tablet, 2 on mobile.
+
+### Changed
+
+- Controls section now has a Browse/Lookup tab toggle and a unified search bar that filters archives in browse mode or triggers URL lookup in lookup mode.
+- Bumped version to 0.1.0 (first feature milestone).
+
 ## [0.0.4] - 2026-04-03
 
 ### Added
@@ -63,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tags: `url`, `r`, `x` (SHA-256), `m` (MIME), `format`, `size`, `title`, `archived-at`, `tool`
 - Uploads to multiple Blossom servers for redundancy
 
+[0.1.0]: https://github.com/dergigi/naan/compare/v0.0.4...v0.1.0
 [0.0.4]: https://github.com/dergigi/naan/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/dergigi/naan/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/dergigi/naan/compare/v0.0.1...v0.0.2
