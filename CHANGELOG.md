@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-04-03
+
+### Added
+
+- Auto-archive from public mentions (WoT-gated). New `monitor-mentions.sh` script subscribes to kind 1 events tagging NAAN's pubkey, checks the sender against Gigi's follow list (kind 3 contact list), extracts URLs, runs the full archive pipeline, and replies publicly with Blossom links and SHA-256 hashes. Includes rate limiting (max 3 per run), deduplication via persistent state, follow list caching, and a 10-minute age cutoff to avoid processing historical backlog.
+
 ## [0.1.0] - 2026-04-03
 
 ### Added
@@ -77,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tags: `url`, `r`, `x` (SHA-256), `m` (MIME), `format`, `size`, `title`, `archived-at`, `tool`
 - Uploads to multiple Blossom servers for redundancy
 
+[0.1.1]: https://github.com/dergigi/naan/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/dergigi/naan/compare/v0.0.4...v0.1.0
 [0.0.4]: https://github.com/dergigi/naan/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/dergigi/naan/compare/v0.0.2...v0.0.3
