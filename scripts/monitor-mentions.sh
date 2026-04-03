@@ -227,6 +227,21 @@ mark_processed() {
   tail -500 "$PROCESSED_FILE" > "$PROCESSED_FILE.tmp" && mv "$PROCESSED_FILE.tmp" "$PROCESSED_FILE"
 }
 
+# --- Resolve pubkey to profile name ---
+resolve_name() {
+  local pubkey="$1"
+  local name=""
+  for relay in "${RELAYS[@]}"; do
+    name=$(timeout 5 nak req -k 0 -a "$pubkey" --limit 1 "$relay" 2>/dev/null | jq -r '.content' 2>/dev/null | jq -r '.display_name // .name // empty' 2>/dev/null || true)
+    if [ -n "$name" ]; then
+      echo "$name"
+      return
+    fi
+  done
+  # Fallback: npub
+  nak encode npub "$pubkey" 2>/dev/null || echo "$pubkey"
+}
+
 # --- Extract URLs from text ---
 extract_urls() {
   local text="$1"
@@ -345,8 +360,9 @@ while IFS= read -r event_json; do
     continue
   fi
 
+  SENDER_NAME=$(resolve_name "$SENDER")
   echo ""
-  echo "[Mention] From: $SENDER"
+  echo "[Mention] From: $SENDER_NAME ($SENDER)"
   echo "[Mention] Content: $CONTENT"
   echo "[Mention] Event: $EVENT_ID"
 
