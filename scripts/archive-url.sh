@@ -16,6 +16,7 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARCHIVE_DIR="/data/.openclaw/agents/naan/workspace/archives"
 NSEC_FILE="${NSEC_FILE:-/data/.openclaw/agents/naan/workspace/.nostr-nsec.key}"
 BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com" "https://blossom.sovereignengineering.io" "https://haven.dergigi.com")
@@ -52,7 +53,6 @@ fi
 CHROME_PATH="${CHROME_PATH:-/usr/bin/chromium}"
 COOKIES_FILE="${COOKIES_FILE:-/data/.openclaw/agents/naan/workspace/.youtube-cookies.txt}"
 HTREE_THRESHOLD=${HTREE_THRESHOLD:-52428800}  # 50MB default
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 URL=""
 IS_VIDEO=false
