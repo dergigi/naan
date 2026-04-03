@@ -26,6 +26,11 @@ OTS_DIR="${OTS_DIR:-$ARCHIVE_DIR/ots}"
 OPERATOR_PUBKEY="${OPERATOR_PUBKEY:-}"
 OWNER_PUBKEY="${OWNER_PUBKEY:-}"
 
+# Access control: owner | friends | followers | follows | anyone
+ACCESS_TIER="${ACCESS_TIER:-follows}"
+WHITELIST_FILE="${WHITELIST_FILE:-}"
+BLACKLIST_FILE="${BLACKLIST_FILE:-}"
+
 # Default servers and relays (space-separated strings or arrays)
 _DEFAULT_BLOSSOM="https://blossom.primal.net https://cdn.hzrd149.com"
 _DEFAULT_RELAYS="wss://relay.damus.io wss://relay.primal.net wss://nos.lol"
@@ -83,4 +88,83 @@ NODE_PUBKEY="${NODE_PUBKEY:-$(_get_node_pubkey)}"
 # Read nsec helper
 _read_nsec() {
   cat "$NSEC_FILE"
+}
+
+# --- Access Control Helpers ---
+
+# Check if a pubkey is in a file (one hex pubkey per line)
+_pubkey_in_file() {
+  local pubkey="$1"
+  local filepath="$2"
+  [ -n "$filepath" ] && [ -f "$filepath" ] && grep -qxF "$pubkey" "$filepath" 2>/dev/null
+}
+
+# Check if pubkey is blacklisted
+is_blacklisted() {
+  _pubkey_in_file "$1" "$BLACKLIST_FILE"
+}
+
+# Check if pubkey is whitelisted
+is_whitelisted() {
+  _pubkey_in_file "$1" "$WHITELIST_FILE"
+}
+
+# Check if pubkey follows the owner (sender has owner in their kind 3)
+_pubkey_follows_owner() {
+  local pubkey="$1"
+  for relay in "${RELAYS_ARRAY[@]}"; do
+    local contact_event
+    contact_event=$(nak req -k 3 -a "$pubkey" --limit 1 "$relay" 2>/dev/null | head -1 || true)
+    if [ -n "$contact_event" ]; then
+      if echo "$contact_event" | jq -e --arg pk "$OWNER_PUBKEY" '[.tags[] | select(.[0]=="p") | .[1]] | any(. == $pk)' > /dev/null 2>&1; then
+        return 0
+      fi
+      return 1
+    fi
+  done
+  return 1
+}
+
+# Fetch followers of owner (kind 3 events tagging owner). Cached.
+_FOLLOWERS_CACHE="$NAAN_WORKSPACE/.mention-state/followers.json"
+_FOLLOWERS_CACHE_TS="$NAAN_WORKSPACE/.mention-state/followers_ts"
+
+fetch_followers_list() {
+  local now
+  now=$(date +%s)
+  local cache_age=3600
+
+  if [ -f "$_FOLLOWERS_CACHE" ] && [ -f "$_FOLLOWERS_CACHE_TS" ]; then
+    local cached_at
+    cached_at=$(cat "$_FOLLOWERS_CACHE_TS")
+    if (( now - cached_at < cache_age )); then
+      return 0
+    fi
+  fi
+
+  echo "[WoT] Fetching owner's followers..."
+  local all_followers="[]"
+  for relay in "${RELAYS_ARRAY[@]}"; do
+    local follower_events
+    follower_events=$(nak req -k 3 -t p="$OWNER_PUBKEY" --limit 500 "$relay" 2>/dev/null || true)
+    if [ -n "$follower_events" ]; then
+      local follower_pubkeys
+      follower_pubkeys=$(echo "$follower_events" | jq -r '.pubkey' 2>/dev/null | sort -u | jq -Rs 'split("\n") | map(select(. != ""))')
+      all_followers=$(echo -e "$all_followers\n$follower_pubkeys" | jq -s 'flatten | unique')
+      break
+    fi
+  done
+
+  mkdir -p "$(dirname "$_FOLLOWERS_CACHE")"
+  echo "$all_followers" > "$_FOLLOWERS_CACHE"
+  echo "$now" > "$_FOLLOWERS_CACHE_TS"
+  local count
+  count=$(jq 'length' "$_FOLLOWERS_CACHE")
+  echo "[WoT] Cached $count followers"
+}
+
+# Check if pubkey is in followers cache
+_is_follower() {
+  local pubkey="$1"
+  [ -f "$_FOLLOWERS_CACHE" ] && jq -e --arg pk "$pubkey" 'any(. == $pk)' "$_FOLLOWERS_CACHE" > /dev/null 2>&1
 }

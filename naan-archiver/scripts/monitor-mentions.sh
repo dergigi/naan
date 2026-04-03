@@ -75,24 +75,63 @@ fetch_follow_list() {
 is_authorized() {
   local pubkey="$1"
 
-  # Owner is always allowed
+  # 1. Blacklist always denies
+  if is_blacklisted "$pubkey"; then
+    return 1
+  fi
+
+  # 2. Whitelist always allows
+  if is_whitelisted "$pubkey"; then
+    return 0
+  fi
+
+  # 3. Owner is always allowed
   if [ -n "$OWNER_PUBKEY" ] && [ "$pubkey" = "$OWNER_PUBKEY" ]; then
     return 0
   fi
 
-  # If no owner set, allow all
-  if [ -z "$OWNER_PUBKEY" ]; then
-    return 0
-  fi
-
-  # Check follow list
-  if [ -f "$FOLLOW_CACHE" ]; then
-    if jq -e --arg pk "$pubkey" 'any(. == $pk)' "$FOLLOW_CACHE" > /dev/null 2>&1; then
+  # 4. Evaluate access tier
+  case "$ACCESS_TIER" in
+    owner)
+      # Only owner (already checked above)
+      return 1
+      ;;
+    friends)
+      # Mutual follows: owner follows them AND they follow owner
+      if [ -f "$FOLLOW_CACHE" ]; then
+        if jq -e --arg pk "$pubkey" 'any(. == $pk)' "$FOLLOW_CACHE" > /dev/null 2>&1; then
+          # Owner follows them; now check if they follow owner
+          if _pubkey_follows_owner "$pubkey"; then
+            return 0
+          fi
+        fi
+      fi
+      return 1
+      ;;
+    followers)
+      # Anyone who follows the owner
+      if _is_follower "$pubkey"; then
+        return 0
+      fi
+      return 1
+      ;;
+    follows)
+      # Anyone the owner follows (current behavior)
+      if [ -f "$FOLLOW_CACHE" ]; then
+        if jq -e --arg pk "$pubkey" 'any(. == $pk)' "$FOLLOW_CACHE" > /dev/null 2>&1; then
+          return 0
+        fi
+      fi
+      return 1
+      ;;
+    anyone)
       return 0
-    fi
-  fi
-
-  return 1
+      ;;
+    *)
+      echo "[WoT] Unknown ACCESS_TIER: $ACCESS_TIER, defaulting to owner-only" >&2
+      return 1
+      ;;
+  esac
 }
 
 is_processed() {
@@ -138,6 +177,11 @@ echo "Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 echo ""
 
 fetch_follow_list
+
+# Fetch followers if needed for the current access tier
+if [ "$ACCESS_TIER" = "followers" ]; then
+  fetch_followers_list
+fi
 
 NOW=$(date +%s)
 if [ -n "$SINCE" ]; then

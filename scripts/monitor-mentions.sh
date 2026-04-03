@@ -2,8 +2,9 @@
 # monitor-mentions.sh — Monitor public mentions, archive URLs, reply with results
 # Usage: monitor-mentions.sh [--dry-run] [--since <unix_ts>]
 #
-# Subscribes to kind 1 events tagging NAAN's pubkey, filters by WoT (Gigi's follow list),
-# extracts URLs, archives them, and replies publicly.
+# Subscribes to kind 1 events tagging NAAN's pubkey, filters by configurable
+# access tiers (owner/friends/followers/follows/anyone), extracts URLs,
+# archives them, and replies publicly.
 #
 # Requires: nak, jq, curl, bash scripts in scripts/
 
@@ -17,11 +18,16 @@ NSEC_FILE="${NSEC_FILE:-$WORKSPACE_DIR/.nostr-nsec.key}"
 # NAAN identity
 NAAN_PUBKEY="d1ee2f8ee60e7b2496176963e9f710ca476c456f5f9be2bbe3b4f1e6c62052ff"
 
-# Gigi's pubkey (always allowed)
+# Gigi's pubkey (always allowed as owner)
 OWNER_PUBKEY="6e468422dfb74a5738702a8823b9b28168abab8655faacb6853cd0ee15deee93"
 
 RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
 DM_RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
+
+# Access control: owner | friends | followers | follows | anyone
+ACCESS_TIER="${ACCESS_TIER:-follows}"
+WHITELIST_FILE="${WHITELIST_FILE:-}"
+BLACKLIST_FILE="${BLACKLIST_FILE:-}"
 
 # Rate limits
 MAX_ARCHIVES_PER_RUN=3
@@ -44,6 +50,8 @@ mkdir -p "$STATE_DIR"
 PROCESSED_FILE="$STATE_DIR/processed.txt"
 FOLLOW_CACHE="$STATE_DIR/follows.json"
 FOLLOW_CACHE_TS="$STATE_DIR/follows_ts"
+FOLLOWERS_CACHE="$STATE_DIR/followers.json"
+FOLLOWERS_CACHE_TS="$STATE_DIR/followers_ts"
 touch "$PROCESSED_FILE"
 
 # --- Fetch Gigi's follow list (kind 3) with caching ---
@@ -84,23 +92,126 @@ fetch_follow_list() {
   fi
 }
 
-# --- Check if pubkey is authorized ---
-is_authorized() {
-  local pubkey="$1"
+# --- Fetch owner's followers (kind 3 events tagging owner) with caching ---
+fetch_followers_list() {
+  local now
+  now=$(date +%s)
+  local cache_age=3600
 
-  # Owner is always allowed
-  if [ "$pubkey" = "$OWNER_PUBKEY" ]; then
-    return 0
-  fi
-
-  # Check follow list
-  if [ -f "$FOLLOW_CACHE" ]; then
-    if jq -e --arg pk "$pubkey" 'any(. == $pk)' "$FOLLOW_CACHE" > /dev/null 2>&1; then
+  if [ -f "$FOLLOWERS_CACHE" ] && [ -f "$FOLLOWERS_CACHE_TS" ]; then
+    local cached_at
+    cached_at=$(cat "$FOLLOWERS_CACHE_TS")
+    if (( now - cached_at < cache_age )); then
       return 0
     fi
   fi
 
+  echo "[WoT] Fetching owner's followers..."
+  local all_followers="[]"
+  for relay in "${RELAYS[@]}"; do
+    local follower_events
+    follower_events=$(nak req -k 3 -t p="$OWNER_PUBKEY" --limit 500 "$relay" 2>/dev/null || true)
+    if [ -n "$follower_events" ]; then
+      local follower_pubkeys
+      follower_pubkeys=$(echo "$follower_events" | jq -r '.pubkey' 2>/dev/null | sort -u | jq -Rs 'split("\n") | map(select(. != ""))')
+      all_followers=$(echo -e "$all_followers\n$follower_pubkeys" | jq -s 'flatten | unique')
+      break
+    fi
+  done
+
+  echo "$all_followers" > "$FOLLOWERS_CACHE"
+  echo "$now" > "$FOLLOWERS_CACHE_TS"
+  local count
+  count=$(jq 'length' "$FOLLOWERS_CACHE")
+  echo "[WoT] Cached $count followers"
+}
+
+# --- Access control helpers ---
+_pubkey_in_file() {
+  local pubkey="$1"
+  local filepath="$2"
+  [ -n "$filepath" ] && [ -f "$filepath" ] && grep -qxF "$pubkey" "$filepath" 2>/dev/null
+}
+
+_pubkey_follows_owner() {
+  local pubkey="$1"
+  for relay in "${RELAYS[@]}"; do
+    local contact_event
+    contact_event=$(nak req -k 3 -a "$pubkey" --limit 1 "$relay" 2>/dev/null | head -1 || true)
+    if [ -n "$contact_event" ]; then
+      if echo "$contact_event" | jq -e --arg pk "$OWNER_PUBKEY" '[.tags[] | select(.[0]=="p") | .[1]] | any(. == $pk)' > /dev/null 2>&1; then
+        return 0
+      fi
+      return 1
+    fi
+  done
   return 1
+}
+
+_is_follower() {
+  local pubkey="$1"
+  [ -f "$FOLLOWERS_CACHE" ] && jq -e --arg pk "$pubkey" 'any(. == $pk)' "$FOLLOWERS_CACHE" > /dev/null 2>&1
+}
+
+# --- Check if pubkey is authorized ---
+is_authorized() {
+  local pubkey="$1"
+
+  # 1. Blacklist always denies
+  if _pubkey_in_file "$pubkey" "$BLACKLIST_FILE"; then
+    return 1
+  fi
+
+  # 2. Whitelist always allows
+  if _pubkey_in_file "$pubkey" "$WHITELIST_FILE"; then
+    return 0
+  fi
+
+  # 3. Owner is always allowed
+  if [ "$pubkey" = "$OWNER_PUBKEY" ]; then
+    return 0
+  fi
+
+  # 4. Evaluate access tier
+  case "$ACCESS_TIER" in
+    owner)
+      return 1
+      ;;
+    friends)
+      # Mutual follows: owner follows them AND they follow owner
+      if [ -f "$FOLLOW_CACHE" ]; then
+        if jq -e --arg pk "$pubkey" 'any(. == $pk)' "$FOLLOW_CACHE" > /dev/null 2>&1; then
+          if _pubkey_follows_owner "$pubkey"; then
+            return 0
+          fi
+        fi
+      fi
+      return 1
+      ;;
+    followers)
+      # Anyone who follows the owner
+      if _is_follower "$pubkey"; then
+        return 0
+      fi
+      return 1
+      ;;
+    follows)
+      # Anyone the owner follows (default, backward-compatible)
+      if [ -f "$FOLLOW_CACHE" ]; then
+        if jq -e --arg pk "$pubkey" 'any(. == $pk)' "$FOLLOW_CACHE" > /dev/null 2>&1; then
+          return 0
+        fi
+      fi
+      return 1
+      ;;
+    anyone)
+      return 0
+      ;;
+    *)
+      echo "[WoT] Unknown ACCESS_TIER: $ACCESS_TIER, defaulting to owner-only" >&2
+      return 1
+      ;;
+  esac
 }
 
 # --- Check if we already processed this event ---
@@ -154,9 +265,15 @@ reply_to_note() {
 # --- Main ---
 echo "=== NAAN Mention Monitor ==="
 echo "Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+echo "Access tier: $ACCESS_TIER"
 echo ""
 
 fetch_follow_list
+
+# Fetch followers if needed for the current access tier
+if [ "$ACCESS_TIER" = "followers" ]; then
+  fetch_followers_list
+fi
 
 # Determine since timestamp
 NOW=$(date +%s)
@@ -223,7 +340,7 @@ while IFS= read -r event_json; do
 
   # Check authorization
   if ! is_authorized "$SENDER"; then
-    echo "[Skip] Unauthorized sender: $SENDER"
+    echo "[Skip] Unauthorized sender: $SENDER (tier: $ACCESS_TIER)"
     mark_processed "$EVENT_ID"
     continue
   fi
