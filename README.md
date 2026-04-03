@@ -60,7 +60,7 @@ bash scripts/blossom-upload.sh video.mp4 https://cdn.hzrd149.com
 
 ### `monitor-mentions.sh`
 
-Monitor public Nostr mentions tagging NAAN and auto-archive URLs. Access is gated by Gigi's Web of Trust (kind 3 follow list): only Gigi and accounts Gigi follows can trigger archives.
+Monitor public Nostr mentions tagging NAAN and auto-archive URLs. Access is controlled by configurable tiers: `owner` (owner only), `friends` (mutual follows), `followers` (anyone following the owner), `follows` (anyone the owner follows, default), or `anyone`. Whitelist and blacklist files provide per-pubkey overrides. Set `ACCESS_TIER` in `naan.conf` or as an environment variable.
 
 ```bash
 # Run the monitor (processes mentions from the last 10 minutes)
