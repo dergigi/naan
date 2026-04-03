@@ -215,6 +215,14 @@ function getProfileName(pubkey) {
 }
 
 // --- OTS ---
+function otsHtml(eventId) {
+  const proof = otsProofs.get(eventId);
+  if (proof) {
+    return `<a href="https://njump.me/${proof}" target="_blank" class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">OTS</a>`;
+  }
+  return '<span class="tag ots-pending" title="OpenTimestamps proof pending">OTS pending</span>';
+}
+
 function queryOtsProofs(relays, archiveEventIds) {
   if (archiveEventIds.length === 0) return;
 
@@ -225,10 +233,10 @@ function queryOtsProofs(relays, archiveEventIds) {
       next: (event) => {
         const referencedId = getTag(event, "e");
         if (referencedId && !otsProofs.has(referencedId)) {
-          otsProofs.set(referencedId, true);
+          otsProofs.set(referencedId, event.id);
           const badge = document.querySelector(`[data-ots="${referencedId}"]`);
           if (badge) {
-            badge.innerHTML = '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>';
+            badge.innerHTML = otsHtml(referencedId);
           }
         }
       },
@@ -382,7 +390,7 @@ function renderArchiveCard(event) {
         ${durationStr ? `<span class="tag">⏱ ${durationStr}</span>` : ""}
         ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
         ${hashtreeRoot ? `<span class="tag hashtree" title="Chunked via Hashtree for P2P streaming">🌲 chunked</span>` : ""}
-        <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
+        <span data-ots="${event.id}">${otsHtml(event.id)}</span>
       </div>
       ${hashtags.length > 0 ? `<div class="archive-meta">${hashtags.slice(0, 8).map((t) => `<span class="tag hashtag">#${escapeHtml(t)}</span>`).join("")}</div>` : ""}
       ${allUrls.length > 0 || hashtreeRoot ? `
@@ -422,7 +430,7 @@ function renderArchiveCard(event) {
       ${tool ? `<span class="tag tool">${escapeHtml(tool)}</span>` : ""}
       ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
       ${hashtreeRoot ? `<span class="tag hashtree" title="Chunked via Hashtree for streaming">🌲 chunked</span>` : ""}
-      <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
+      <span data-ots="${event.id}">${otsHtml(event.id)}</span>
     </div>
     ${blossomUrls.length > 0 || hashtreeRoot ? `
       <div class="archive-links">
@@ -951,7 +959,7 @@ function renderSnapshotList(filterDate, events) {
           ${durationStr ? `<span class="tag">⏱ ${durationStr}</span>` : ""}
           ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
           ${htRoot ? `<span class="tag hashtree" title="Chunked via Hashtree">🌲 chunked</span>` : ""}
-          <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
+          <span data-ots="${event.id}">${otsHtml(event.id)}</span>
         </div>
         ${allUrls.length > 0 || htRoot ? `<div class="archive-links">${allUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}${htRoot ? ` <a href="https://files.iris.to/#/${escapeHtml(htRoot)}/${escapeHtml(videoUrl.split('/').pop() || hash + '.mp4')}" target="_blank">🌲 Stream</a>` : ""}</div>` : ""}
         ${renderAttribution(event)}
@@ -978,7 +986,7 @@ function renderSnapshotList(filterDate, events) {
         ${tool ? `<span class="tag tool">${escapeHtml(tool)}</span>` : ""}
         ${hash ? `<span class="tag" title="${escapeHtml(hash)}">sha256:${escapeHtml(hash.substring(0, 12))}…</span>` : ""}
         ${htRoot ? `<span class="tag hashtree" title="Chunked via Hashtree">🌲 chunked</span>` : ""}
-        <span data-ots="${event.id}">${hasOts ? '<span class="tag ots" title="Bitcoin-timestamped via OpenTimestamps (NIP-03)">₿ timestamped</span>' : ""}</span>
+        <span data-ots="${event.id}">${otsHtml(event.id)}</span>
       </div>
       ${blossomUrls.length > 0 || htRoot ? `<div class="archive-links">${blossomUrls.map((u) => { try { return `<a href="${escapeHtml(u)}" target="_blank">📦 ${new URL(u).hostname}</a>`; } catch { return `<a href="${escapeHtml(u)}" target="_blank">📦 mirror</a>`; } }).join("")}${htRoot ? ` <a href="https://files.iris.to/#/${escapeHtml(htRoot)}/${escapeHtml(blossomUrls.length > 0 ? blossomUrls[0].split('/').pop() : (hash || '') + '.' + (format || 'bin'))}" target="_blank">🌲 Hashtree</a>` : ""}</div>` : ""}
       ${renderAttribution(event)}

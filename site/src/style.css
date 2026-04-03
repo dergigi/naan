@@ -271,7 +271,10 @@ main {
 
 .tag.format { color: var(--accent); }
 .tag.tool { color: var(--green); }
-.tag.ots { color: #f7931a; background: rgba(247, 147, 26, 0.12); }
+.tag.ots { color: #f7931a; background: rgba(247, 147, 26, 0.12); text-decoration: none; cursor: pointer; }
+.tag.ots:hover { background: rgba(247, 147, 26, 0.25); }
+a.tag.ots { display: inline-block; }
+.tag.ots-pending { color: var(--text-muted); background: var(--tag-bg); opacity: 0.7; }
 .tag.hashtree { color: #2d8a4e; background: rgba(45, 138, 78, 0.12); }
 .tag.hashtag { color: var(--link); }
 
