@@ -19,7 +19,36 @@ set -euo pipefail
 ARCHIVE_DIR="/data/.openclaw/agents/naan/workspace/archives"
 NSEC_FILE="${NSEC_FILE:-/data/.openclaw/agents/naan/workspace/.nostr-nsec.key}"
 BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com" "https://blossom.sovereignengineering.io" "https://haven.dergigi.com")
+# Default relay list (overridden by NIP-65 discovery if available)
 RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
+NAAN_PUBKEY="d1ee2f8ee60e7b2496176963e9f710ca476c456f5f9be2bbe3b4f1e6c62052ff"
+
+# Try NIP-65 outbox relay discovery for publishing
+if [ -f "$SCRIPT_DIR/relay-discovery.sh" ]; then
+  STATE_DIR="${STATE_DIR:-/data/.openclaw/agents/naan/workspace/.mention-state}"
+  export STATE_DIR
+  source "$SCRIPT_DIR/relay-discovery.sh"
+  OUTBOX=()
+  while IFS= read -r r; do
+    [ -n "$r" ] && OUTBOX+=("$r")
+  done < <(discover_outbox_relays "$NAAN_PUBKEY" 2>/dev/null || true)
+  if [ ${#OUTBOX[@]} -gt 0 ]; then
+    # Merge outbox + seed relays (dedup)
+    declare -A _seen
+    MERGED=()
+    for r in "${OUTBOX[@]}" "${RELAYS[@]}"; do
+      nr=$(echo "$r" | sed 's|/$||')
+      if [ -z "${_seen[$nr]+x}" ]; then
+        MERGED+=("$nr")
+        _seen["$nr"]=1
+      fi
+    done
+    unset _seen
+    RELAYS=("${MERGED[@]}")
+    echo "[NIP-65] Publishing to ${#RELAYS[@]} relays (${#OUTBOX[@]} from kind 10002)"
+  fi
+fi
+
 CHROME_PATH="${CHROME_PATH:-/usr/bin/chromium}"
 COOKIES_FILE="${COOKIES_FILE:-/data/.openclaw/agents/naan/workspace/.youtube-cookies.txt}"
 HTREE_THRESHOLD=${HTREE_THRESHOLD:-52428800}  # 50MB default

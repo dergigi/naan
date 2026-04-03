@@ -7,7 +7,33 @@
 set -euo pipefail
 
 URL="${1:?Usage: lookup-archive.sh <url>}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NAAN_PUBKEY="d1ee2f8ee60e7b2496176963e9f710ca476c456f5f9be2bbe3b4f1e6c62052ff"
+
+# Default relays, enhanced with NIP-65 discovery
 RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
+if [ -f "$SCRIPT_DIR/relay-discovery.sh" ]; then
+  STATE_DIR="${STATE_DIR:-/data/.openclaw/agents/naan/workspace/.mention-state}"
+  export STATE_DIR
+  source "$SCRIPT_DIR/relay-discovery.sh"
+  ALL=()
+  while IFS= read -r r; do
+    [ -n "$r" ] && ALL+=("$r")
+  done < <(discover_outbox_relays "$NAAN_PUBKEY" 2>/dev/null || true)
+  if [ ${#ALL[@]} -gt 0 ]; then
+    declare -A _seen
+    MERGED=()
+    for r in "${ALL[@]}" "${RELAYS[@]}"; do
+      nr=$(echo "$r" | sed 's|/$||')
+      if [ -z "${_seen[$nr]+x}" ]; then
+        MERGED+=("$nr")
+        _seen["$nr"]=1
+      fi
+    done
+    unset _seen
+    RELAYS=("${MERGED[@]}")
+  fi
+fi
 
 echo "Looking up archives for: $URL"
 echo ""
