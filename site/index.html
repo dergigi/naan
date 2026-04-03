@@ -13,28 +13,22 @@
   </header>
 
   <div class="controls">
-    <div class="view-toggle">
-      <button id="browseTab" class="tab active">Browse</button>
-      <button id="lookupTab" class="tab">Lookup URL</button>
-    </div>
     <div class="search-row">
-      <input type="text" id="searchInput" placeholder="Filter by URL or title..." />
+      <input type="text" id="searchInput" placeholder="Search archives or enter a URL..." />
       <button id="refreshBtn">Refresh</button>
+    </div>
+    <div class="filter-row" id="filterRow">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="pages">Pages</button>
+      <button class="filter-btn" data-filter="videos">Videos</button>
     </div>
   </div>
 
   <div class="stats" id="stats"></div>
 
   <main>
-    <!-- Browse view (default) -->
-    <div id="browseView">
-      <div id="archiveList" class="archive-list">
-        <div class="loading"><span class="spinner"></span> Querying relays...</div>
-      </div>
-    </div>
-
-    <!-- Lookup/Calendar view -->
-    <div id="lookupView" class="hidden">
+    <!-- URL lookup section (shown inline when a URL is searched) -->
+    <div id="lookupSection" class="hidden">
       <div id="lookupLoading" class="hidden">
         <div class="loading"><span class="spinner"></span> Searching archives for this URL...</div>
       </div>
@@ -56,11 +50,18 @@
         <div id="snapshotList" class="snapshot-list"></div>
       </div>
     </div>
+
+    <!-- Browse feed (default view) -->
+    <div id="browseView">
+      <div id="archiveList" class="archive-list">
+        <div class="loading"><span class="spinner"></span> Querying relays...</div>
+      </div>
+    </div>
   </main>
 
   <footer>
     <p>Powered by <a href="https://applesauce.build">Applesauce</a> + <a href="https://github.com/hzrd149/blossom">Blossom</a> + Nostr · <a href="https://github.com/dergigi/naan">GitHub</a> · <a href="https://nsyte.run">nsyte</a></p>
-    <p>v0.1.0</p>
+    <p>v0.3.0</p>
   </footer>
 
   <script type="module" src="/src/main.js"></script>

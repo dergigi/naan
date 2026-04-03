@@ -41,8 +41,9 @@ const queriedRelays = new Set();
 const profileCache = new Map();
 const otsProofs = new Map();
 
-// View state
-let currentView = "browse"; // "browse" or "lookup"
+// UI mode: "browse" (feed + text filter) or "lookup" (URL archive history)
+let currentMode = "browse";
+let activeFilter = "all"; // "all" | "pages" | "videos"
 
 // Lookup state
 let lookupEvents = [];
@@ -153,6 +154,23 @@ function monthKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// Detect whether input looks like a URL
+function looksLikeUrl(input) {
+  const trimmed = input.trim();
+  if (!trimmed || trimmed.includes(" ")) return false;
+  if (trimmed.match(/^https?:\/\//)) return true;
+  // Has a dot and no spaces: likely a URL
+  if (trimmed.includes(".") && trimmed.length > 4) return true;
+  return false;
+}
+
+// Apply type filter to an event list
+function applyTypeFilter(events) {
+  if (activeFilter === "pages") return events.filter((e) => !isVideoEvent(e));
+  if (activeFilter === "videos") return events.filter((e) => isVideoEvent(e));
+  return events;
+}
+
 // --- Profile resolution ---
 function subscribeToProfile(pubkey) {
   if (profileCache.has(pubkey)) return;
@@ -198,32 +216,29 @@ function queryOtsProofs(relays, archiveEventIds) {
     });
 }
 
-// --- View switching ---
-function switchView(view) {
-  currentView = view;
-  const browseView = document.getElementById("browseView");
-  const lookupView = document.getElementById("lookupView");
-  const browseTab = document.getElementById("browseTab");
-  const lookupTab = document.getElementById("lookupTab");
-  const searchInput = document.getElementById("searchInput");
+// ===================================================
+// MODE SWITCHING
+// ===================================================
 
-  if (view === "browse") {
+function setMode(mode) {
+  currentMode = mode;
+  const browseView = document.getElementById("browseView");
+  const lookupSection = document.getElementById("lookupSection");
+
+  if (mode === "browse") {
     browseView.classList.remove("hidden");
-    lookupView.classList.add("hidden");
-    browseTab.classList.add("active");
-    lookupTab.classList.remove("active");
-    searchInput.placeholder = "Filter by URL or title...";
+    lookupSection.classList.add("hidden");
+    // Re-render with current filter
+    const events = eventStore.database.getTimeline(ARCHIVE_FILTER);
+    renderArchives(events);
   } else {
     browseView.classList.add("hidden");
-    lookupView.classList.remove("hidden");
-    browseTab.classList.remove("active");
-    lookupTab.classList.add("active");
-    searchInput.placeholder = "Enter URL to look up archive history...";
+    lookupSection.classList.remove("hidden");
   }
 }
 
 // ===================================================
-// BROWSE VIEW (existing functionality)
+// BROWSE VIEW
 // ===================================================
 
 function updateStats() {
@@ -247,9 +262,12 @@ function renderArchives(events) {
   const list = document.getElementById("archiveList");
   const filter = document.getElementById("searchInput").value.toLowerCase();
 
-  let filtered = events;
-  if (filter) {
-    filtered = events.filter((e) => {
+  // Apply type filter first
+  let filtered = applyTypeFilter(events);
+
+  // Then text filter
+  if (filter && !looksLikeUrl(filter)) {
+    filtered = filtered.filter((e) => {
       const title = (getTag(e, "title") || "").toLowerCase();
       const url = (getTag(e, "r") || "").toLowerCase();
       const pages = getAllTags(e, "page").join(" ").toLowerCase();
@@ -389,7 +407,6 @@ function normalizeUrl(url) {
   if (!u.match(/^https?:\/\//)) u = "https://" + u;
   try {
     const parsed = new URL(u);
-    // Remove trailing slash for consistency
     let norm = parsed.origin + parsed.pathname.replace(/\/+$/, "") + parsed.search + parsed.hash;
     return norm;
   } catch {
@@ -404,6 +421,8 @@ function performLookup(url) {
   lookupEvents = [];
   selectedDate = null;
 
+  setMode("lookup");
+
   // Show loading
   document.getElementById("lookupLoading").classList.remove("hidden");
   document.getElementById("lookupEmpty").classList.add("hidden");
@@ -412,10 +431,8 @@ function performLookup(url) {
   // Try multiple URL variants
   const variants = new Set();
   variants.add(normalized);
-  // With and without trailing slash
   variants.add(normalized + "/");
   if (normalized.endsWith("/")) variants.add(normalized.slice(0, -1));
-  // http/https variants
   if (normalized.startsWith("https://")) {
     variants.add(normalized.replace("https://", "http://"));
   } else if (normalized.startsWith("http://")) {
@@ -455,7 +472,6 @@ function performLookup(url) {
       });
   });
 
-  // Timeout fallback
   setTimeout(() => {
     if (completedQueries < totalQueries) {
       finishLookup(normalized, collected);
@@ -466,11 +482,13 @@ function performLookup(url) {
 function finishLookup(url, events) {
   document.getElementById("lookupLoading").classList.add("hidden");
 
-  // Sort by timestamp, oldest first
   events.sort((a, b) => getEventTimestamp(a) - getEventTimestamp(b));
   lookupEvents = events;
 
-  if (events.length === 0) {
+  // Apply type filter
+  const filtered = applyTypeFilter(events);
+
+  if (filtered.length === 0) {
     document.getElementById("lookupEmpty").classList.remove("hidden");
     document.getElementById("lookupResults").classList.add("hidden");
     return;
@@ -479,32 +497,32 @@ function finishLookup(url, events) {
   document.getElementById("lookupEmpty").classList.add("hidden");
   document.getElementById("lookupResults").classList.remove("hidden");
 
-  // Subscribe to profiles
-  const pubkeys = new Set(events.map((e) => e.pubkey));
+  const pubkeys = new Set(filtered.map((e) => e.pubkey));
   pubkeys.forEach((pk) => subscribeToProfile(pk));
 
-  // Query OTS
-  queryOtsProofs(SEED_RELAYS, events.map((e) => e.id));
+  queryOtsProofs(SEED_RELAYS, filtered.map((e) => e.id));
 
-  // Set calendar year to the most recent event's year
-  const latestDate = getEventDate(events[events.length - 1]);
+  const latestDate = getEventDate(filtered[filtered.length - 1]);
   calendarYear = latestDate.getFullYear();
 
-  // Render URL header
   document.getElementById("lookupUrl").innerHTML = `<a href="${escapeHtml(url)}" target="_blank">${escapeHtml(url)}</a>`;
 
-  renderLookupSummary();
-  renderTimeline();
-  renderCalendar();
-  renderSnapshotList(null); // show all snapshots initially
+  renderLookupSummary(filtered);
+  renderTimeline(filtered);
+  renderCalendar(filtered);
+  renderSnapshotList(null, filtered);
 }
 
-function renderLookupSummary() {
+function renderLookupSummary(events) {
   const el = document.getElementById("lookupSummary");
-  const count = lookupEvents.length;
-  const firstDate = formatDateShort(getEventTimestamp(lookupEvents[0]));
-  const lastDate = formatDateShort(getEventTimestamp(lookupEvents[lookupEvents.length - 1]));
-  const archivers = new Set(lookupEvents.map((e) => e.pubkey)).size;
+  if (!events || events.length === 0) {
+    el.textContent = "";
+    return;
+  }
+  const count = events.length;
+  const firstDate = formatDateShort(getEventTimestamp(events[0]));
+  const lastDate = formatDateShort(getEventTimestamp(events[events.length - 1]));
+  const archivers = new Set(events.map((e) => e.pubkey)).size;
 
   let text = `${count} snapshot${count !== 1 ? "s" : ""}`;
   if (count > 1) {
@@ -519,24 +537,22 @@ function renderLookupSummary() {
 }
 
 // --- Timeline bar chart ---
-function renderTimeline() {
+function renderTimeline(events) {
   const el = document.getElementById("timeline");
-  if (lookupEvents.length < 2) {
+  if (!events || events.length < 2) {
     el.innerHTML = "";
     return;
   }
 
-  // Group events by month
   const monthCounts = new Map();
-  lookupEvents.forEach((event) => {
+  events.forEach((event) => {
     const d = getEventDate(event);
     const key = monthKey(d);
     monthCounts.set(key, (monthCounts.get(key) || 0) + 1);
   });
 
-  // Build contiguous month range
-  const firstDate = getEventDate(lookupEvents[0]);
-  const lastDate = getEventDate(lookupEvents[lookupEvents.length - 1]);
+  const firstDate = getEventDate(events[0]);
+  const lastDate = getEventDate(events[events.length - 1]);
   const months = [];
   let current = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
   const end = new Date(lastDate.getFullYear(), lastDate.getMonth(), 1);
@@ -554,8 +570,6 @@ function renderTimeline() {
   }
 
   const maxCount = Math.max(...months.map((m) => m.count));
-
-  // Show abbreviated labels if too many months
   const useShort = months.length > 12;
 
   el.innerHTML = `
@@ -572,27 +586,27 @@ function renderTimeline() {
         .join("")}
     </div>`;
 
-  // Click on bar to jump to that year
   el.querySelectorAll(".timeline-bar-col").forEach((col) => {
     col.addEventListener("click", () => {
       const year = parseInt(col.dataset.year);
       if (year && year !== calendarYear) {
         calendarYear = year;
-        renderCalendar();
+        renderCalendar(applyTypeFilter(lookupEvents));
       }
     });
   });
 }
 
 // --- Calendar grid ---
-function renderCalendar() {
+function renderCalendar(events) {
   const grid = document.getElementById("calendarGrid");
   const yearLabel = document.getElementById("calYear");
   yearLabel.textContent = calendarYear;
 
-  // Group events by date for this year
+  if (!events) events = applyTypeFilter(lookupEvents);
+
   const dayCounts = new Map();
-  lookupEvents.forEach((event) => {
+  events.forEach((event) => {
     const d = getEventDate(event);
     if (d.getFullYear() !== calendarYear) return;
     const key = dateKey(d);
@@ -606,7 +620,6 @@ function renderCalendar() {
   for (let month = 0; month < 12; month++) {
     const firstDay = new Date(calendarYear, month, 1);
     const daysInMonth = new Date(calendarYear, month + 1, 0).getDate();
-    // Monday = 0, Sunday = 6
     let startDow = firstDay.getDay() - 1;
     if (startDow < 0) startDow = 6;
 
@@ -615,7 +628,6 @@ function renderCalendar() {
     html += `<div class="cal-day-headers">${DAY_NAMES.map((d) => `<span>${d[0]}</span>`).join("")}</div>`;
     html += `<div class="cal-days">`;
 
-    // Empty cells before first day
     for (let i = 0; i < startDow; i++) {
       html += `<span class="cal-day empty"></span>`;
     }
@@ -636,32 +648,31 @@ function renderCalendar() {
 
   grid.innerHTML = html;
 
-  // Click handlers for days
   grid.querySelectorAll(".cal-day.has-snapshots").forEach((el) => {
     el.addEventListener("click", () => {
       const date = el.dataset.date;
       if (selectedDate === date) {
-        // Deselect
         selectedDate = null;
         grid.querySelectorAll(".cal-day.selected").forEach((s) => s.classList.remove("selected"));
-        renderSnapshotList(null);
+        renderSnapshotList(null, applyTypeFilter(lookupEvents));
       } else {
         selectedDate = date;
         grid.querySelectorAll(".cal-day.selected").forEach((s) => s.classList.remove("selected"));
         el.classList.add("selected");
-        renderSnapshotList(date);
+        renderSnapshotList(date, applyTypeFilter(lookupEvents));
       }
     });
   });
 }
 
 // --- Snapshot list ---
-function renderSnapshotList(filterDate) {
+function renderSnapshotList(filterDate, events) {
   const el = document.getElementById("snapshotList");
 
-  let events = lookupEvents;
+  if (!events) events = applyTypeFilter(lookupEvents);
+
   if (filterDate) {
-    events = lookupEvents.filter((e) => dateKey(getEventDate(e)) === filterDate);
+    events = events.filter((e) => dateKey(getEventDate(e)) === filterDate);
   }
 
   if (events.length === 0) {
@@ -669,7 +680,6 @@ function renderSnapshotList(filterDate) {
     return;
   }
 
-  // Sort newest first for the list
   const sorted = [...events].sort((a, b) => getEventTimestamp(b) - getEventTimestamp(a));
 
   const header = filterDate
@@ -795,7 +805,7 @@ function fetchArchives() {
   queriedRelays.clear();
 
   eventStore.timeline(ARCHIVE_FILTER).subscribe((events) => {
-    if (currentView === "browse") {
+    if (currentMode === "browse") {
       renderArchives(events);
     }
   });
@@ -836,50 +846,98 @@ function fetchArchives() {
   }, 10000);
 }
 
-// --- Event Listeners ---
+// --- Handle input changes ---
+function handleInput() {
+  const value = searchInput.value.trim();
 
-// View tabs
-document.getElementById("browseTab").addEventListener("click", () => switchView("browse"));
-document.getElementById("lookupTab").addEventListener("click", () => switchView("lookup"));
+  if (!value) {
+    // Empty: show browse feed
+    if (currentMode !== "browse") setMode("browse");
+    else {
+      const events = eventStore.database.getTimeline(ARCHIVE_FILTER);
+      renderArchives(events);
+    }
+    return;
+  }
 
-// Search input: filter in browse mode, lookup in lookup mode
-const searchInput = document.getElementById("searchInput");
-searchInput.addEventListener("input", () => {
-  if (currentView === "browse") {
+  if (!looksLikeUrl(value)) {
+    // Text filter: show browse feed filtered
+    if (currentMode !== "browse") setMode("browse");
+    else {
+      const events = eventStore.database.getTimeline(ARCHIVE_FILTER);
+      renderArchives(events);
+    }
+  }
+  // If it looks like a URL, don't do anything on input -- wait for Enter
+}
+
+// Re-render current view with new filter
+function rerender() {
+  if (currentMode === "browse") {
     const events = eventStore.database.getTimeline(ARCHIVE_FILTER);
     renderArchives(events);
+  } else {
+    // Re-filter lookup results
+    const filtered = applyTypeFilter(lookupEvents);
+    if (filtered.length === 0) {
+      document.getElementById("lookupEmpty").classList.remove("hidden");
+      document.getElementById("lookupResults").classList.add("hidden");
+    } else {
+      document.getElementById("lookupEmpty").classList.add("hidden");
+      document.getElementById("lookupResults").classList.remove("hidden");
+      renderLookupSummary(filtered);
+      renderTimeline(filtered);
+      renderCalendar(filtered);
+      renderSnapshotList(selectedDate, filtered);
+    }
   }
-});
+}
+
+// --- Event Listeners ---
+const searchInput = document.getElementById("searchInput");
+
+searchInput.addEventListener("input", handleInput);
 
 searchInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && currentView === "lookup") {
-    const url = searchInput.value.trim();
-    if (url) performLookup(url);
+  if (e.key === "Enter") {
+    const value = searchInput.value.trim();
+    if (looksLikeUrl(value)) {
+      performLookup(value);
+    }
   }
 });
 
 document.getElementById("refreshBtn").addEventListener("click", () => {
-  if (currentView === "lookup") {
-    const url = searchInput.value.trim();
-    if (url) {
-      performLookup(url);
-    } else {
-      fetchArchives();
-    }
+  const value = searchInput.value.trim();
+  if (looksLikeUrl(value)) {
+    performLookup(value);
   } else {
+    if (currentMode !== "browse") setMode("browse");
     fetchArchives();
   }
+});
+
+// Filter buttons
+document.querySelectorAll(".filter-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".filter-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    activeFilter = btn.dataset.filter;
+    rerender();
+  });
 });
 
 // Calendar navigation
 document.getElementById("calPrev").addEventListener("click", () => {
   calendarYear--;
-  renderCalendar();
+  const filtered = applyTypeFilter(lookupEvents);
+  renderCalendar(filtered);
 });
 
 document.getElementById("calNext").addEventListener("click", () => {
   calendarYear++;
-  renderCalendar();
+  const filtered = applyTypeFilter(lookupEvents);
+  renderCalendar(filtered);
 });
 
 // --- Boot ---
