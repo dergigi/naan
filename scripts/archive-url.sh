@@ -272,6 +272,47 @@ EVENT_ID=$(nak event \
   -c "" \
   --ts "$TIMESTAMP" 2>/dev/null | jq -r '.id')
 
+# Build and publish kind 30041 (parametrized replaceable archive announcement)
+echo ""
+echo "[3.5] Publishing kind 30041 archive announcement..."
+
+TAG_ARGS_30041=()
+TAG_ARGS_30041+=(-t "d=$SHA256")
+TAG_ARGS_30041+=(-t "r=$URL")
+[ -n "$TITLE" ] && TAG_ARGS_30041+=(-t "title=$TITLE")
+TAG_ARGS_30041+=(-t "x=$SHA256")
+for BURL in "${BLOSSOM_URLS[@]}"; do
+  TAG_ARGS_30041+=(-t "url=$BURL")
+done
+TAG_ARGS_30041+=(-t "m=$MIMETYPE")
+TAG_ARGS_30041+=(-t "size=$FILESIZE")
+TAG_ARGS_30041+=(-t "alt=Web archive of $URL")
+TAG_ARGS_30041+=(-t "archived_at=$TIMESTAMP")
+TAG_ARGS_30041+=(-t "client=naan")
+TAG_ARGS_30041+=(-t "t=web-archive")
+if [ -n "$REQUESTER_PUBKEY" ]; then
+  TAG_ARGS_30041+=(-t "p=${REQUESTER_PUBKEY};;requester")
+fi
+if [ -n "$HTREE_ROOT" ]; then
+  TAG_ARGS_30041+=(-t "hashtree=$HTREE_ROOT")
+fi
+
+nak event \
+  --sec "$NSEC" \
+  -k 30041 \
+  "${TAG_ARGS_30041[@]}" \
+  -c "" \
+  "${RELAYS[@]}" 2>&1
+
+EVENT_ID_30041=$(nak event \
+  --sec "$NSEC" \
+  -k 30041 \
+  "${TAG_ARGS_30041[@]}" \
+  -c "" \
+  --ts "$TIMESTAMP" 2>/dev/null | jq -r '.id')
+
+echo "  Kind 30041 event: $EVENT_ID_30041"
+
 # Publish NIP-71 video event (kind 34235/34236) for video archives
 NIP71_EVENT_ID=""
 if [ "$IS_VIDEO" = true ]; then
@@ -306,6 +347,7 @@ fi
 echo ""
 echo "=== Archive Complete ==="
 echo "Event:    $EVENT_ID"
+echo "30041:    $EVENT_ID_30041"
 if [ -n "$NIP71_EVENT_ID" ] && [ "$NIP71_EVENT_ID" != "null" ]; then
   echo "NIP-71:   $NIP71_EVENT_ID"
 fi
