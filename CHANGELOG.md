@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-04-04
+
+### Added
+
+- Kind 30041 parametrized replaceable archive announcement events. Published alongside existing kind 4554 events, making NAAN archives discoverable by ecosystem clients like narchives/Arkive, replay.wayback.st, and other nostr web archive readers. The `d` tag uses the SHA-256 hash, so re-archiving the same content replaces the announcement while different snapshots create separate events. Includes all Blossom mirror URLs, requester `p` tag, and hashtree root when applicable.
+
 ## [0.7.0] - 2026-04-03
 
 ### Added
@@ -178,6 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tags: `url`, `r`, `x` (SHA-256), `m` (MIME), `format`, `size`, `title`, `archived-at`, `tool`
 - Uploads to multiple Blossom servers for redundancy
 
+[0.8.0]: https://github.com/dergigi/naan/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/dergigi/naan/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/dergigi/naan/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/dergigi/naan/compare/v0.5.1...v0.6.0
