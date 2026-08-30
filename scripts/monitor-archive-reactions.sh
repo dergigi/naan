@@ -262,6 +262,7 @@ while IFS= read -r event_json <&3; do
 
   if [ "$DRY_RUN" = true ]; then
     echo "[DRY RUN] Would archive: $TARGET_URL"
+    ARCHIVE_COUNT=$((ARCHIVE_COUNT + 1))
     continue
   fi
 
