@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # monitor-archive-reactions.sh - Monitor Boris archive reactions and archive URLs
-# Usage: monitor-archive-reactions.sh [--dry-run] [--since <unix_ts>] [--author <pubkey>] [--all-authors]
+# Usage: monitor-archive-reactions.sh [--dry-run] [--backfill] [--since <unix_ts>] [--max-archives <n>] [--author <pubkey>] [--all-authors]
 #
 # Boris marks web URLs as archived with a kind 17 URL reaction:
 #   content: 📚
@@ -23,10 +23,12 @@ SEED_RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol" "ws
 
 MAX_ARCHIVES_PER_RUN=${MAX_ARCHIVES:-3}
 MAX_AGE_SECONDS=${MAX_AGE_SECONDS:-1800}
+QUERY_LIMIT=${QUERY_LIMIT:-100}
 REACTION_KIND=17
 ARCHIVE_EMOJI="📚"
 
 DRY_RUN=false
+BACKFILL=false
 SINCE=""
 ALL_AUTHORS=false
 AUTHORS=("$OWNER_PUBKEY")
@@ -34,7 +36,9 @@ AUTHORS=("$OWNER_PUBKEY")
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
+    --backfill) BACKFILL=true; shift ;;
     --since) SINCE="$2"; shift 2 ;;
+    --max-archives) MAX_ARCHIVES_PER_RUN="$2"; shift 2 ;;
     --author)
       if [ "${#AUTHORS[@]}" -eq 1 ] && [ "${AUTHORS[0]}" = "$OWNER_PUBKEY" ]; then
         AUTHORS=()
@@ -106,6 +110,7 @@ if [ "$ALL_AUTHORS" = true ]; then
 else
   echo "Authors: ${AUTHORS[*]}"
 fi
+echo "Mode: $([ "$BACKFILL" = true ] && echo "backfill" || echo "recent")"
 echo ""
 
 RELAYS=()
@@ -129,6 +134,8 @@ echo ""
 NOW=$(date +%s)
 if [ -n "$SINCE" ]; then
   SINCE_TS="$SINCE"
+elif [ "$BACKFILL" = true ]; then
+  SINCE_TS=0
 else
   SINCE_TS=$((NOW - MAX_AGE_SECONDS))
 fi
@@ -137,15 +144,20 @@ echo "[Monitor] Querying kind $REACTION_KIND archive reactions since $(date -u -
 
 REACTIONS=""
 for relay in "${RELAYS[@]}"; do
+  query_args=(-k "$REACTION_KIND" --since "$SINCE_TS" --limit "$QUERY_LIMIT")
+  if [ "$BACKFILL" = true ]; then
+    query_args+=(--paginate)
+  fi
+
   if [ "$ALL_AUTHORS" = true ]; then
-    NEW_REACTIONS=$(nak req -k "$REACTION_KIND" --since "$SINCE_TS" --limit 100 "$relay" 2>/dev/null || true)
+    NEW_REACTIONS=$(nak req "${query_args[@]}" "$relay" 2>/dev/null || true)
     if [ -n "$NEW_REACTIONS" ]; then
       REACTIONS="$REACTIONS
 $NEW_REACTIONS"
     fi
   else
     for author in "${AUTHORS[@]}"; do
-      NEW_REACTIONS=$(nak req -k "$REACTION_KIND" -a "$author" --since "$SINCE_TS" --limit 100 "$relay" 2>/dev/null || true)
+      NEW_REACTIONS=$(nak req "${query_args[@]}" -a "$author" "$relay" 2>/dev/null || true)
       if [ -n "$NEW_REACTIONS" ]; then
         REACTIONS="$REACTIONS
 $NEW_REACTIONS"
@@ -188,11 +200,13 @@ while IFS= read -r event_json <&3; do
     continue
   fi
 
-  AGE=$((NOW - CREATED_AT))
-  if [ "$AGE" -gt "$MAX_AGE_SECONDS" ]; then
-    echo "[Skip] Too old ($AGE seconds): $EVENT_ID"
-    mark_processed "$EVENT_ID"
-    continue
+  if [ "$BACKFILL" = false ]; then
+    AGE=$((NOW - CREATED_AT))
+    if [ "$AGE" -gt "$MAX_AGE_SECONDS" ]; then
+      echo "[Skip] Too old ($AGE seconds): $EVENT_ID"
+      mark_processed "$EVENT_ID"
+      continue
+    fi
   fi
 
   TARGET_URL=$(echo "$event_json" | extract_reaction_url)
