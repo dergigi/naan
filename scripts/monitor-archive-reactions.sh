@@ -143,6 +143,9 @@ fi
 echo "[Monitor] Querying kind $REACTION_KIND archive reactions since $(date -u -d @"$SINCE_TS" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "$SINCE_TS")..."
 
 REACTIONS=""
+QUERY_SUCCESS_COUNT=0
+QUERY_FAIL_COUNT=0
+
 for relay in "${RELAYS[@]}"; do
   query_args=(-k "$REACTION_KIND" --since "$SINCE_TS" --limit "$QUERY_LIMIT")
   if [ "$BACKFILL" = true ]; then
@@ -150,21 +153,40 @@ for relay in "${RELAYS[@]}"; do
   fi
 
   if [ "$ALL_AUTHORS" = true ]; then
-    NEW_REACTIONS=$(nak req "${query_args[@]}" "$relay" 2>/dev/null || true)
-    if [ -n "$NEW_REACTIONS" ]; then
-      REACTIONS="$REACTIONS
-$NEW_REACTIONS"
-    fi
-  else
-    for author in "${AUTHORS[@]}"; do
-      NEW_REACTIONS=$(nak req "${query_args[@]}" -a "$author" "$relay" 2>/dev/null || true)
+    if NEW_REACTIONS=$(nak req "${query_args[@]}" "$relay" 2>/dev/null); then
+      QUERY_SUCCESS_COUNT=$((QUERY_SUCCESS_COUNT + 1))
       if [ -n "$NEW_REACTIONS" ]; then
         REACTIONS="$REACTIONS
 $NEW_REACTIONS"
       fi
+    else
+      QUERY_FAIL_COUNT=$((QUERY_FAIL_COUNT + 1))
+      echo "[Warn] Query failed: $relay" >&2
+    fi
+  else
+    for author in "${AUTHORS[@]}"; do
+      if NEW_REACTIONS=$(nak req "${query_args[@]}" -a "$author" "$relay" 2>/dev/null); then
+        QUERY_SUCCESS_COUNT=$((QUERY_SUCCESS_COUNT + 1))
+        if [ -n "$NEW_REACTIONS" ]; then
+          REACTIONS="$REACTIONS
+$NEW_REACTIONS"
+        fi
+      else
+        QUERY_FAIL_COUNT=$((QUERY_FAIL_COUNT + 1))
+        echo "[Warn] Query failed: $relay author=$author" >&2
+      fi
     done
   fi
 done
+
+if [ "$QUERY_SUCCESS_COUNT" -eq 0 ]; then
+  echo "[Error] All relay queries failed ($QUERY_FAIL_COUNT failures); archive reaction state is unknown" >&2
+  exit 1
+fi
+
+if [ "$QUERY_FAIL_COUNT" -gt 0 ]; then
+  echo "[Monitor] Relay queries: $QUERY_SUCCESS_COUNT succeeded, $QUERY_FAIL_COUNT failed"
+fi
 
 if [ -z "$(echo "$REACTIONS" | tr -d '[:space:]')" ]; then
   echo "[Monitor] No archive reactions found"
@@ -243,7 +265,6 @@ while IFS= read -r event_json <&3; do
   ARCHIVE_OUTPUT=$(bash "$SCRIPT_DIR/archive-url.sh" "$TARGET_URL" --requester "$SENDER" < /dev/null 2>&1) || {
     echo "[Error] Archive failed for $TARGET_URL"
     echo "$ARCHIVE_OUTPUT" | tail -5
-    mark_processed "$EVENT_ID"
     continue
   }
 
