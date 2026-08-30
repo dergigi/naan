@@ -58,6 +58,9 @@ is_processed() {
 
 mark_processed() {
   local event_id="$1"
+  if [ "$DRY_RUN" = true ]; then
+    return 0
+  fi
   echo "$event_id" >> "$PROCESSED_FILE"
   tail -1000 "$PROCESSED_FILE" > "$PROCESSED_FILE.tmp" && mv "$PROCESSED_FILE.tmp" "$PROCESSED_FILE"
 }
@@ -219,7 +222,6 @@ while IFS= read -r event_json <&3; do
 
   if [ "$DRY_RUN" = true ]; then
     echo "[DRY RUN] Would archive: $TARGET_URL"
-    mark_processed "$EVENT_ID"
     continue
   fi
 
