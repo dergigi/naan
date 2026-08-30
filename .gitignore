@@ -17,6 +17,7 @@ archives/
 
 # Mention monitor state
 .mention-state/
+.archive-reaction-state/
 
 # Skill build artifacts
 *.skill
