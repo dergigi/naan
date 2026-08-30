@@ -8,7 +8,7 @@
 set -euo pipefail
 
 HTREE="${HTREE:-htree}"
-BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com" "https://blossom.sovereignengineering.io" "https://haven.dergigi.com")
+BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com" "https://blossom.sovereignengineering.io" "https://haven.dergigi.com" "https://relay.dergigi.com")
 DRY_RUN=false
 FILE=""
 CUSTOM_SERVERS=()
