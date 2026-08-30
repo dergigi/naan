@@ -6,8 +6,9 @@
 #   content: 📚
 #   tags: [["r", "https://example.com/..."]]
 #
-# This monitor watches those reactions, extracts the r-tag URL, and sends it
-# through NAAN's normal archive pipeline.
+# This monitor watches those reactions from all authors by default, extracts the
+# r-tag URL, and sends it through NAAN's normal archive pipeline. Use --author
+# to scope a run to one or more pubkeys.
 
 set -euo pipefail
 
@@ -18,7 +19,6 @@ STATE_DIR="${STATE_DIR:-$WORKSPACE_DIR/.archive-reaction-state}"
 # shellcheck source=relay-discovery.sh
 source "$SCRIPT_DIR/relay-discovery.sh"
 
-OWNER_PUBKEY="6e468422dfb74a5738702a8823b9b28168abab8655faacb6853cd0ee15deee93"
 SEED_RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol" "wss://wot.dergigi.com" "wss://haven.dergigi.com" "wss://relay.dergigi.com")
 
 MAX_ARCHIVES_PER_RUN=${MAX_ARCHIVES:-3}
@@ -30,8 +30,8 @@ ARCHIVE_EMOJI="📚"
 DRY_RUN=false
 BACKFILL=false
 SINCE=""
-ALL_AUTHORS=false
-AUTHORS=("$OWNER_PUBKEY")
+ALL_AUTHORS=true
+AUTHORS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,9 +40,7 @@ while [[ $# -gt 0 ]]; do
     --since) SINCE="$2"; shift 2 ;;
     --max-archives) MAX_ARCHIVES_PER_RUN="$2"; shift 2 ;;
     --author)
-      if [ "${#AUTHORS[@]}" -eq 1 ] && [ "${AUTHORS[0]}" = "$OWNER_PUBKEY" ]; then
-        AUTHORS=()
-      fi
+      ALL_AUTHORS=false
       AUTHORS+=("$2")
       shift 2
       ;;
