@@ -16,10 +16,12 @@
 
 set -euo pipefail
 
+export PATH="/data/.npm-global/bin:$PATH"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARCHIVE_DIR="/data/.openclaw/agents/naan/workspace/archives"
 NSEC_FILE="${NSEC_FILE:-/data/.openclaw/agents/naan/workspace/.nostr-nsec.key}"
-BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com" "https://blossom.sovereignengineering.io" "https://haven.dergigi.com")
+BLOSSOM_SERVERS=("https://blossom.primal.net" "https://cdn.hzrd149.com" "https://blossom.sovereignengineering.io" "https://haven.dergigi.com" "https://relay.dergigi.com")
 # Default relay list (overridden by NIP-65 discovery if available)
 RELAYS=("wss://relay.damus.io" "wss://relay.primal.net" "wss://nos.lol")
 NAAN_PUBKEY="d1ee2f8ee60e7b2496176963e9f710ca476c456f5f9be2bbe3b4f1e6c62052ff"
@@ -262,6 +264,7 @@ nak event \
   --sec "$NSEC" \
   -k 4554 \
   "${TAG_ARGS[@]}" \
+  --ts "$TIMESTAMP" \
   -c "" \
   "${RELAYS[@]}" 2>&1
 
@@ -301,6 +304,7 @@ nak event \
   --sec "$NSEC" \
   -k 30041 \
   "${TAG_ARGS_30041[@]}" \
+  --ts "$TIMESTAMP" \
   -c "" \
   "${RELAYS[@]}" 2>&1
 
