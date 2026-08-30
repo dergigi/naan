@@ -55,11 +55,13 @@ mkdir -p "$STATE_DIR"
 PROCESSED_FILE="$STATE_DIR/processed.txt"
 touch "$PROCESSED_FILE"
 
+# Return success when a reaction event ID has already been handled.
 is_processed() {
   local event_id="$1"
   grep -qF "$event_id" "$PROCESSED_FILE" 2>/dev/null
 }
 
+# Persist a handled event ID unless this is a dry run.
 mark_processed() {
   local event_id="$1"
   if [ "$DRY_RUN" = true ]; then
@@ -69,10 +71,12 @@ mark_processed() {
   tail -1000 "$PROCESSED_FILE" > "$PROCESSED_FILE.tmp" && mv "$PROCESSED_FILE.tmp" "$PROCESSED_FILE"
 }
 
+# Normalize relay URLs so deduplication treats trailing slashes as identical.
 normalize_relay() {
   echo "$1" | sed 's|/$||'
 }
 
+# Add a relay URL to RELAYS once, preserving first-seen order.
 add_relay() {
   local relay
   relay=$(normalize_relay "$1")
@@ -83,6 +87,7 @@ add_relay() {
   fi
 }
 
+# Extract the last web URL from a kind 17 reaction's r tags.
 extract_reaction_url() {
   jq -r '
     [.tags[]? | select(.[0] == "r" and ((.[1] // "") | test("^https?://"; "i"))) | .[1]]
@@ -90,6 +95,7 @@ extract_reaction_url() {
   '
 }
 
+# Resolve a pubkey to a profile name, falling back to npub or raw hex.
 resolve_name() {
   local pubkey="$1"
   local name=""
